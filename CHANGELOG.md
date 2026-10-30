@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2 — 2026-10-31
+
+- Paste a screenshot from the clipboard directly as the video cover (`Ctrl+V`, or `Cmd+V` on macOS).
+- Pasted images are stored inside the plugin's `covers/` folder as PNG/JPEG/WebP and survive restarts.
+- Added a visible paste hint and a 25 MB image-size guard.
+
 ## 0.1.1 — 2026-10-31
 
 - Bilibili bangumi / movie links (`/bangumi/play/ep...`) are now resolved to their video and can be collected directly.

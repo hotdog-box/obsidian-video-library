@@ -49,6 +49,7 @@ export class VideoEditModal extends Modal {
   private detectTimer = 0;
   private detectionSeq = 0;
   private detection: Promise<void> | null = null;
+  private pasteHandler: ((event: ClipboardEvent) => void) | null = null;
 
   constructor(
     app: App,
@@ -73,6 +74,11 @@ export class VideoEditModal extends Modal {
     this.buildSourceSection();
     this.buildMainFields();
     this.buildCoverSection();
+
+    this.pasteHandler = (event: ClipboardEvent) => {
+      void this.handlePaste(event);
+    };
+    this.modalEl.addEventListener("paste", this.pasteHandler);
 
     this.formError = this.contentEl.createDiv({ cls: "vl-form-error" });
 
@@ -251,6 +257,7 @@ export class VideoEditModal extends Modal {
 
     const controls = body.createDiv({ cls: "vl-cover-controls" });
     this.coverStatus = controls.createDiv({ cls: "vl-cover-status" });
+    controls.createEl("p", { text: t("form.coverPasteHint"), cls: "vl-paste-hint" });
     const actions = controls.createDiv({ cls: "vl-cover-actions" });
     this.coverAction(actions, "sparkles", t("action.autoCover"), () => void this.autoCover());
     this.coverAction(actions, "link", t("action.imageUrl"), () => this.promptImageUrl());
@@ -551,6 +558,49 @@ export class VideoEditModal extends Modal {
     });
   }
 
+  private async handlePaste(event: ClipboardEvent): Promise<void> {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      if (!item.type.toLowerCase().startsWith("image/")) continue;
+
+      const file = item.getAsFile();
+      if (!file) continue;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (file.size > 25 * 1024 * 1024) {
+        new Notice(t("notice.imageTooLarge"));
+        return;
+      }
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const type = file.type.toLowerCase();
+        const extension = type.includes("jpeg")
+          ? "jpg"
+          : type.includes("webp")
+            ? "webp"
+            : type.includes("gif")
+              ? "gif"
+              : type.includes("avif")
+                ? "avif"
+                : type.includes("bmp")
+                  ? "bmp"
+                  : "png";
+        this.setCoverBuffer(buffer, extension);
+        this.coverStatus.setText(t("form.coverPasted"));
+        new Notice(t("notice.coverPasted"));
+      } catch {
+        new Notice(t("notice.coverFailed"));
+      }
+      return;
+    }
+  }
+
   private removeCover(): void {
     this.coverBuffer = null;
     this.coverRemoved = true;
@@ -706,6 +756,10 @@ export class VideoEditModal extends Modal {
   onClose(): void {
     window.clearTimeout(this.detectTimer);
     this.detectionSeq += 1;
+    if (this.pasteHandler) {
+      this.modalEl.removeEventListener("paste", this.pasteHandler);
+      this.pasteHandler = null;
+    }
     this.revokePreview();
     this.contentEl.empty();
   }

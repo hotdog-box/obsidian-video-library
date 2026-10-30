@@ -1,0 +1,421 @@
+import type { LanguageSetting, Provider } from "./types";
+
+export type Lang = "zh" | "en";
+
+const en = {
+  "app.name": "Video Library",
+  "app.subtitle": "Collect · Organize · Watch",
+  "app.tagline": "Your video links, with covers and categories.",
+
+  "nav.all": "All videos",
+  "nav.favorites": "Favorites",
+  "nav.uncategorized": "Uncategorized",
+  "nav.categories": "Categories",
+  "nav.manageCategories": "Manage categories",
+
+  "action.add": "Add",
+  "action.addVideo": "Add video",
+  "action.edit": "Edit",
+  "action.delete": "Delete",
+  "action.play": "Play",
+  "action.openOriginal": "Open original",
+  "action.cancel": "Cancel",
+  "action.save": "Save",
+  "action.saving": "Saving…",
+  "action.close": "Close",
+  "action.retry": "Retry",
+  "action.refresh": "Refresh",
+  "action.choose": "Choose",
+  "action.change": "Change",
+  "action.remove": "Remove",
+  "action.create": "Create",
+  "action.rename": "Rename",
+  "action.confirm": "Confirm",
+  "action.settings": "Settings",
+  "action.favorite": "Add to favorites",
+  "action.unfavorite": "Remove from favorites",
+  "action.clearSearch": "Clear search",
+  "action.clearFilters": "Clear filters",
+  "action.openLibrary": "Open video library",
+  "action.detect": "Detect info",
+  "action.autoCover": "Auto cover",
+  "action.imageUrl": "Image URL",
+  "action.localImage": "Local image",
+  "action.removeCover": "Remove cover",
+  "action.captureCover": "Capture from video",
+
+  "search.placeholder": "Search title, tag, author…",
+  "sort.newest": "Newest added",
+  "sort.oldest": "Oldest added",
+  "sort.titleAsc": "Title A–Z",
+  "sort.titleDesc": "Title Z–A",
+
+  "filter.all": "All videos",
+  "filter.favorites": "Favorites",
+  "filter.uncategorized": "Uncategorized",
+
+  "count.one": "{count} video",
+  "count.many": "{count} videos",
+
+  "empty.libraryTitle": "Your video library is empty",
+  "empty.libraryDesc": "Paste a Bilibili, YouTube or other video link. The cover and title will be filled in automatically.",
+  "empty.filterTitle": "Nothing here yet",
+  "empty.filterDesc": "No video matches this category or search. Try another filter.",
+  "empty.cta": "Add your first video",
+
+  "form.addTitle": "Add video",
+  "form.editTitle": "Edit video",
+  "form.subtitle": "The cover and title can be fetched automatically, and everything can be changed later.",
+  "form.source": "Source",
+  "form.link": "Video link",
+  "form.linkDesc": "Bilibili, YouTube, Vimeo, a direct video URL, or any web page.",
+  "form.urlPlaceholder": "Paste a video link here…",
+  "form.local": "Local video",
+  "form.localDesc": "Choose a video that is already inside this vault. To use a file from elsewhere, drag it into the vault first.",
+  "form.chooseVideo": "Choose a video in this vault",
+  "form.noLocal": "No local video selected",
+  "form.title": "Title",
+  "form.titlePlaceholder": "Leave empty to use the detected title",
+  "form.category": "Category",
+  "form.tags": "Tags",
+  "form.tagsPlaceholder": "study, music, later (comma separated)",
+  "form.notes": "Notes",
+  "form.notesPlaceholder": "Why are you saving this video?",
+  "form.cover": "Cover",
+  "form.coverHint": "Fetched automatically. You can replace it with an image URL or a local image.",
+  "form.coverEmpty": "No cover yet",
+  "form.coverDetecting": "Fetching cover…",
+  "form.detecting": "Detecting video info…",
+  "form.detected": "Info detected. You can still edit anything.",
+  "form.detectFailed": "Could not fetch info automatically. You can fill it in manually.",
+  "form.requiredSource": "Please paste a video link or choose a local video.",
+  "form.invalidUrl": "That does not look like a valid http(s) link.",
+  "form.duplicate": "This video is already in your library.",
+  "form.saveFailed": "Could not save the video. Please try again.",
+  "form.localSelected": "Selected: {name}",
+  "form.changeSource": "Change source",
+  "form.newCategory": "New category",
+  "form.untitled": "Untitled video",
+  "form.coverFromVideo": "This cover will be captured from the local video after saving.",
+  "form.coverCapturing": "Capturing a cover from the video…",
+
+  "player.notEmbeddable": "This page cannot be embedded",
+  "player.notEmbeddableDesc": "The site does not allow playing inside Obsidian. Use “Open original” to watch it in your browser.",
+  "player.localMissing": "Local video not found",
+  "player.localMissingDesc": "The file may have been moved or renamed. Edit this item and choose the video again.",
+  "player.notes": "Notes",
+  "player.meta": "Details",
+  "player.embedHint": "If the player stays blank, open the original page in your browser.",
+
+  "category.manageTitle": "Manage categories",
+  "category.manageDesc": "Categories are only for organizing your library. Deleting a category does not delete its videos.",
+  "category.new": "New category",
+  "category.newTitle": "New category",
+  "category.editTitle": "Edit category",
+  "category.name": "Name",
+  "category.namePlaceholder": "e.g. Study, Music, Watch later",
+  "category.color": "Color",
+  "category.count": "{count} videos",
+  "category.deleteTitle": "Delete category?",
+  "category.deleteDesc": "“{name}” will be deleted. Its {count} video(s) will move to Uncategorized.",
+  "category.deleteConfirm": "Delete category",
+  "category.nameRequired": "Please enter a category name.",
+  "category.duplicate": "A category with this name already exists.",
+  "category.created": "Category created.",
+  "category.renamed": "Category renamed.",
+  "category.deleted": "Category deleted.",
+  "category.uncategorizedName": "Uncategorized",
+  "category.uncategorizedDesc": "Videos without a category live here.",
+  "category.empty": "No custom categories yet. Create one to group your videos.",
+  "category.nameHint": "Keep it short. You can rename it at any time.",
+
+  "notice.added": "Video added.",
+  "notice.updated": "Video updated.",
+  "notice.deleted": "Video deleted.",
+  "notice.coverUpdated": "Cover updated.",
+  "notice.coverFailed": "Could not fetch the cover. Try another image.",
+  "notice.coverRemoved": "Cover removed.",
+  "notice.copied": "Link copied.",
+  "notice.dataSaved": "Settings saved.",
+  "notice.captureStarted": "Capturing a cover in the background…",
+  "notice.captureFailed": "Could not capture a cover from this video.",
+
+  "confirm.deleteVideoTitle": "Delete this video?",
+  "confirm.deleteVideoDesc": "“{title}” will be removed from the library. The original web page or local file will not be touched.",
+  "confirm.delete": "Delete",
+
+  "settings.title": "Video Library",
+  "settings.language": "Interface language",
+  "settings.languageDesc": "“Auto” follows Obsidian’s language.",
+  "settings.auto": "Auto",
+  "settings.zh": "中文",
+  "settings.en": "English",
+  "settings.open": "Open video library",
+  "settings.openDesc": "Open the library in a new tab.",
+  "settings.data": "Data location",
+  "settings.dataDesc": "Video data is stored at {path}. Covers are stored in its covers folder. Back up this folder to keep your library.",
+  "settings.covers": "Covers",
+  "settings.coversDesc": "Downloaded covers: {count}. They live inside the plugin folder and are safe to back up.",
+  "settings.about": "About",
+  "settings.aboutDesc": "Version {version}. Made for organizing video links inside Obsidian.",
+  "settings.cardSize": "Card size",
+  "settings.cardSizeDesc": "Choose how large the covers appear in the grid.",
+  "settings.small": "Small",
+  "settings.medium": "Medium",
+  "settings.large": "Large",
+
+  "provider.bilibili": "Bilibili",
+  "provider.youtube": "YouTube",
+  "provider.vimeo": "Vimeo",
+  "provider.direct": "Direct video",
+  "provider.web": "Web page",
+  "provider.local": "Local video",
+
+  "menu.copyLink": "Copy link",
+  "menu.copyPath": "Copy path",
+
+  "misc.unknown": "Unknown",
+  "misc.noCover": "No cover",
+  "misc.loading": "Loading…",
+  "misc.videoCount": "{count} videos",
+  "misc.untitled": "Untitled video",
+  "misc.duration": "{duration}",
+
+  "error.generic": "Something went wrong. Please try again."
+} as const;
+
+export type MessageKey = keyof typeof en;
+
+const zh: Record<MessageKey, string> = {
+  "app.name": "视频库",
+  "app.subtitle": "收集 · 整理 · 观看",
+  "app.tagline": "带封面和分类的视频链接收藏夹。",
+
+  "nav.all": "全部视频",
+  "nav.favorites": "收藏",
+  "nav.uncategorized": "未分类",
+  "nav.categories": "分类",
+  "nav.manageCategories": "管理分类",
+
+  "action.add": "添加",
+  "action.addVideo": "添加视频",
+  "action.edit": "编辑",
+  "action.delete": "删除",
+  "action.play": "播放",
+  "action.openOriginal": "打开原网页",
+  "action.cancel": "取消",
+  "action.save": "保存",
+  "action.saving": "正在保存…",
+  "action.close": "关闭",
+  "action.retry": "重试",
+  "action.refresh": "刷新",
+  "action.choose": "选择",
+  "action.change": "更换",
+  "action.remove": "移除",
+  "action.create": "创建",
+  "action.rename": "重命名",
+  "action.confirm": "确认",
+  "action.settings": "设置",
+  "action.favorite": "加入收藏",
+  "action.unfavorite": "取消收藏",
+  "action.clearSearch": "清空搜索",
+  "action.clearFilters": "清除筛选",
+  "action.openLibrary": "打开视频库",
+  "action.detect": "识别信息",
+  "action.autoCover": "自动封面",
+  "action.imageUrl": "图片链接",
+  "action.localImage": "本地图片",
+  "action.removeCover": "移除封面",
+  "action.captureCover": "从视频截封面",
+
+  "search.placeholder": "搜索标题、标签、作者…",
+  "sort.newest": "最新添加",
+  "sort.oldest": "最早添加",
+  "sort.titleAsc": "标题 A–Z",
+  "sort.titleDesc": "标题 Z–A",
+
+  "filter.all": "全部视频",
+  "filter.favorites": "收藏",
+  "filter.uncategorized": "未分类",
+
+  "count.one": "{count} 个视频",
+  "count.many": "{count} 个视频",
+
+  "empty.libraryTitle": "视频库还是空的",
+  "empty.libraryDesc": "粘贴一个 B站、YouTube 或其他视频链接，标题和封面会自动填好。",
+  "empty.filterTitle": "这里还没有内容",
+  "empty.filterDesc": "没有符合当前分类或搜索的视频，换个筛选条件试试。",
+  "empty.cta": "添加第一个视频",
+
+  "form.addTitle": "添加视频",
+  "form.editTitle": "编辑视频",
+  "form.subtitle": "标题和封面可以自动识别，保存后也随时能改。",
+  "form.source": "来源",
+  "form.link": "视频链接",
+  "form.linkDesc": "支持 B站、YouTube、Vimeo、视频直链，或其他普通网页。",
+  "form.urlPlaceholder": "把视频链接粘贴在这里…",
+  "form.local": "本地视频",
+  "form.localDesc": "只能选择已经在这个仓库里的视频。其他位置的文件，请先拖进仓库。",
+  "form.chooseVideo": "选择仓库中的视频",
+  "form.noLocal": "还没有选择本地视频",
+  "form.title": "标题",
+  "form.titlePlaceholder": "留空则使用自动识别的标题",
+  "form.category": "分类",
+  "form.tags": "标签",
+  "form.tagsPlaceholder": "学习, 音乐, 稍后看（用逗号分隔）",
+  "form.notes": "备注",
+  "form.notesPlaceholder": "为什么收藏这个视频？",
+  "form.cover": "封面",
+  "form.coverHint": "会自动获取，也可以换成图片链接或本地图片。",
+  "form.coverEmpty": "还没有封面",
+  "form.coverDetecting": "正在获取封面…",
+  "form.detecting": "正在识别视频信息…",
+  "form.detected": "识别完成，所有内容仍可手动修改。",
+  "form.detectFailed": "没能自动识别，你可以手动填写。",
+  "form.requiredSource": "请粘贴视频链接，或选择一个本地视频。",
+  "form.invalidUrl": "这看起来不是有效的 http(s) 链接。",
+  "form.duplicate": "这个视频已经在视频库里了。",
+  "form.saveFailed": "保存失败，请再试一次。",
+  "form.localSelected": "已选择：{name}",
+  "form.changeSource": "更换来源",
+  "form.newCategory": "新建分类",
+  "form.untitled": "未命名视频",
+  "form.coverFromVideo": "保存后会从本地视频中截取一帧作为封面。",
+  "form.coverCapturing": "正在从视频截取封面…",
+
+  "player.notEmbeddable": "这个网页无法内嵌播放",
+  "player.notEmbeddableDesc": "网站不允许在 Obsidian 内播放，点“打开原网页”在浏览器里观看。",
+  "player.localMissing": "找不到本地视频",
+  "player.localMissingDesc": "文件可能被移动或改名了。编辑这一项，重新选择视频。",
+  "player.notes": "备注",
+  "player.meta": "详细信息",
+  "player.embedHint": "如果播放器空白或无法播放，请点“打开原网页”。",
+
+  "category.manageTitle": "管理分类",
+  "category.manageDesc": "分类只用于整理视频库。删除分类不会删除里面的视频。",
+  "category.new": "新建分类",
+  "category.newTitle": "新建分类",
+  "category.editTitle": "编辑分类",
+  "category.name": "名称",
+  "category.namePlaceholder": "例如：学习、音乐、稍后看",
+  "category.color": "颜色",
+  "category.count": "{count} 个视频",
+  "category.deleteTitle": "删除分类？",
+  "category.deleteDesc": "“{name}”将被删除，其中 {count} 个视频会移到“未分类”。",
+  "category.deleteConfirm": "删除分类",
+  "category.nameRequired": "请输入分类名称。",
+  "category.duplicate": "已经有同名分类了。",
+  "category.created": "分类已创建。",
+  "category.renamed": "分类已重命名。",
+  "category.deleted": "分类已删除。",
+  "category.uncategorizedName": "未分类",
+  "category.uncategorizedDesc": "没有归类的视频会放在这里。",
+  "category.empty": "还没有自定义分类。新建一个，把视频分组吧。",
+  "category.nameHint": "名字短一点更好看，之后随时可以重命名。",
+
+  "notice.added": "视频已添加。",
+  "notice.updated": "视频已更新。",
+  "notice.deleted": "视频已删除。",
+  "notice.coverUpdated": "封面已更新。",
+  "notice.coverFailed": "封面获取失败，换一张图片试试。",
+  "notice.coverRemoved": "封面已移除。",
+  "notice.copied": "链接已复制。",
+  "notice.dataSaved": "设置已保存。",
+  "notice.captureStarted": "正在后台截取封面…",
+  "notice.captureFailed": "没能从这个视频里截取封面。",
+
+  "confirm.deleteVideoTitle": "删除这个视频？",
+  "confirm.deleteVideoDesc": "“{title}”会从视频库移除，但原网页或本地文件不会被删除。",
+  "confirm.delete": "删除",
+
+  "settings.title": "视频库",
+  "settings.language": "界面语言",
+  "settings.languageDesc": "“自动”会跟随 Obsidian 的语言。",
+  "settings.auto": "自动",
+  "settings.zh": "中文",
+  "settings.en": "English",
+  "settings.open": "打开视频库",
+  "settings.openDesc": "在新标签页中打开视频库。",
+  "settings.data": "数据位置",
+  "settings.dataDesc": "视频数据保存在 {path}，封面保存在同目录的 covers 文件夹。备份这个文件夹就能保留整个视频库。",
+  "settings.covers": "封面",
+  "settings.coversDesc": "已下载 {count} 张封面，都放在插件目录里，可以安全备份。",
+  "settings.about": "关于",
+  "settings.aboutDesc": "版本 {version}，用于在 Obsidian 里整理视频链接。",
+  "settings.cardSize": "卡片大小",
+  "settings.cardSizeDesc": "调整网格里封面卡片的大小。",
+  "settings.small": "小",
+  "settings.medium": "中",
+  "settings.large": "大",
+
+  "provider.bilibili": "哔哩哔哩",
+  "provider.youtube": "YouTube",
+  "provider.vimeo": "Vimeo",
+  "provider.direct": "视频直链",
+  "provider.web": "普通网页",
+  "provider.local": "本地视频",
+
+  "menu.copyLink": "复制链接",
+  "menu.copyPath": "复制路径",
+
+  "misc.unknown": "未知",
+  "misc.noCover": "暂无封面",
+  "misc.loading": "加载中…",
+  "misc.videoCount": "{count} 个视频",
+  "misc.untitled": "未命名视频",
+  "misc.duration": "{duration}",
+
+  "error.generic": "出了点问题，请再试一次。"
+};
+
+let currentLanguage: Lang = "zh";
+
+export function resolveLanguage(setting: LanguageSetting): Lang {
+  if (setting === "zh" || setting === "en") return setting;
+  try {
+    const stored = window.localStorage.getItem("language");
+    if (stored) return stored.toLowerCase().startsWith("zh") ? "zh" : "en";
+  } catch {
+    // ignore
+  }
+  return (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+
+export function setLanguage(setting: LanguageSetting): Lang {
+  currentLanguage = resolveLanguage(setting);
+  try {
+    document.documentElement.lang = currentLanguage === "zh" ? "zh-CN" : "en";
+  } catch {
+    // ignore
+  }
+  return currentLanguage;
+}
+
+export function getLanguage(): Lang {
+  return currentLanguage;
+}
+
+export function t(key: MessageKey, vars?: Record<string, string | number>): string {
+  const table = currentLanguage === "zh" ? zh : en;
+  let value: string = table[key] ?? en[key] ?? key;
+  if (vars) {
+    for (const [name, replacement] of Object.entries(vars)) {
+      value = value.replace(new RegExp(`\\{${name}\\}`, "g"), String(replacement));
+    }
+  }
+  return value;
+}
+
+export function providerName(provider: Provider): string {
+  return t(`provider.${provider}` as MessageKey);
+}
+
+export function formatDuration(seconds?: number): string {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return "";
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  return `${minutes}:${String(secs).padStart(2, "0")}`;
+}

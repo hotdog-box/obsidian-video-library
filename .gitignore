@@ -1,0 +1,13 @@
+node_modules/
+.npm-cache/
+.npmrc
+main.js
+main.js.map
+styles.css
+deploy.config.json
+data.json
+covers/
+screenshots/
+tests/.tmp/
+*.log
+.DS_Store

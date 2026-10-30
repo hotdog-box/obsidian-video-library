@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "tests/.tmp",
+    "rootDir": ".",
+    "noEmit": false,
+    "sourceMap": false,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": [
+    "tests/**/*.ts",
+    "src/providers.ts",
+    "src/types.ts"
+  ]
+}

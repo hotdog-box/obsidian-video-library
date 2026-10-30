@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5 — 2026-10-31
+
+- Per-video hover preview settings: choose the total preview duration and one or more clips.
+- Clips play in list order; the sequence stops when the configured total duration is reached.
+- Added a preview settings editor with video scrubbing, start/end selection, clip list, reorder and delete.
+- Default behavior remains a 4-second preview from the beginning when no clips are configured.
+
 ## 0.1.4 — 2026-10-31
 
 - Hovering a local or direct-URL video card starts a muted 4-second preview.

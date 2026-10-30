@@ -8,6 +8,7 @@ import { UNCATEGORIZED_ID } from "../types";
 import { CategoryManagerModal } from "./category-modal";
 import { VideoEditModal } from "./video-modal";
 import { VideoPlayerModal } from "./player-modal";
+import { PreviewConfigModal } from "./preview-config-modal";
 
 export const VIEW_TYPE = "video-library-view";
 
@@ -432,7 +433,11 @@ export class VideoLibraryView extends ItemView {
     if (previewSource) {
       card.addEventListener("mouseenter", () => {
         preview?.stop();
-        preview = new HoverPreview(previewSource, cover);
+        preview = new HoverPreview(previewSource, cover, {
+          duration: video.preview?.duration,
+          clips: video.preview?.clips,
+          fallbackDuration: video.duration
+        });
         preview.start();
       });
       card.addEventListener("mouseleave", () => {
@@ -469,6 +474,14 @@ export class VideoLibraryView extends ItemView {
         .setIcon("pencil")
         .onClick(() => this.openEdit(video))
     );
+    if (video.provider === "local" || video.provider === "direct") {
+      menu.addItem((item) =>
+        item
+          .setTitle(t("preview.configure"))
+          .setIcon("sliders-horizontal")
+          .onClick(() => this.openPreviewConfig(video))
+      );
+    }
     if (video.url) {
       menu.addItem((item) =>
         item
@@ -514,6 +527,25 @@ export class VideoLibraryView extends ItemView {
   private openPlayer(video: VideoItem): void {
     HoverPreview.stopActive();
     new VideoPlayerModal(this.app, this.plugin, video).open();
+  }
+
+  private openPreviewConfig(video: VideoItem): void {
+    const source = this.plugin.getVideoSource(video);
+    if (!source) {
+      new Notice(t("preview.onlyLocal"));
+      return;
+    }
+    new PreviewConfigModal(
+      this.app,
+      source,
+      video.duration,
+      video.preview,
+      (config) => {
+        video.preview = config;
+        video.updatedAt = Date.now();
+        void this.plugin.updateVideo(video);
+      }
+    ).open();
   }
 
   private confirmDelete(video: VideoItem): void {

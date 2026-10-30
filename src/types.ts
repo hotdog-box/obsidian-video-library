@@ -17,6 +17,50 @@ export interface Category {
   createdAt: number;
 }
 
+export interface PreviewClip {
+  start: number;
+  end: number;
+}
+
+export interface PreviewConfig {
+  duration: number;
+  clips: PreviewClip[];
+}
+
+export const DEFAULT_PREVIEW_DURATION = 4;
+export const MAX_PREVIEW_DURATION = 300;
+
+export function sanitizePreviewConfig(value: unknown): PreviewConfig | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const source = value as { duration?: unknown; clips?: unknown };
+  const durationNumber = Number(source.duration);
+  const duration = Number.isFinite(durationNumber)
+    ? Math.min(MAX_PREVIEW_DURATION, Math.max(1, Math.round(durationNumber * 10) / 10))
+    : DEFAULT_PREVIEW_DURATION;
+
+  const clips: PreviewClip[] = [];
+  if (Array.isArray(source.clips)) {
+    for (const entry of source.clips.slice(0, 20)) {
+      if (!entry || typeof entry !== "object") continue;
+      const clip = entry as { start?: unknown; end?: unknown };
+      const start = Number(clip.start);
+      const end = Number(clip.end);
+      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+      if (start < 0 || end - start < 0.1) continue;
+      clips.push({
+        start: Math.round(start * 10) / 10,
+        end: Math.round(end * 10) / 10
+      });
+    }
+  }
+
+  return { duration, clips };
+}
+
+export function clonePreviewConfig(config: PreviewConfig | undefined): PreviewConfig | undefined {
+  return config ? { duration: config.duration, clips: config.clips.map((clip) => ({ ...clip })) } : undefined;
+}
+
 export interface VideoItem {
   id: string;
   url: string;
@@ -33,6 +77,7 @@ export interface VideoItem {
   localPath?: string;
   duration?: number;
   epId?: number;
+  preview?: PreviewConfig;
   favorite?: boolean;
   createdAt: number;
   updatedAt: number;

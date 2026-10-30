@@ -806,6 +806,157 @@
   max-width: 95vw;
 }
 
+.modal.vl-preview-config-modal {
+  width: min(900px, 95vw);
+  max-width: 95vw;
+}
+
+.vl-preview-config-modal .vl-frame-stage {
+  height: min(30vh, 280px);
+  min-height: 150px;
+}
+
+.vl-config-duration {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+  margin-bottom: 9px;
+}
+
+.vl-config-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.vl-config-duration .vl-field-label {
+  margin: 0;
+}
+
+.vl-number-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.vl-number-input {
+  width: 78px;
+  padding: 5px 7px;
+}
+
+.vl-unit {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.vl-clip-editor {
+  padding: 8px 10px;
+  margin-top: 10px;
+  background: var(--background-secondary);
+  border-radius: 7px;
+}
+
+.vl-clip-editor .vl-field-hint {
+  margin: 0 0 7px;
+}
+
+.vl-clip-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.vl-clip-input-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+.vl-clip-input-label .vl-number-input {
+  width: 86px;
+}
+
+.vl-clip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 145px;
+  margin-top: 9px;
+  overflow-y: auto;
+}
+
+.vl-clip-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 7px;
+  background: var(--background-secondary);
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.vl-clip-row:hover {
+  border-color: var(--background-modifier-border);
+}
+
+.vl-clip-index {
+  display: grid;
+  flex: 0 0 17px;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  font-size: 9px;
+  color: var(--text-muted);
+  background: var(--background-primary);
+  border-radius: 50%;
+}
+
+.vl-clip-time {
+  flex: 1;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-normal);
+}
+
+.vl-clip-length {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.vl-clip-actions {
+  display: flex;
+  gap: 1px;
+}
+
+.vl-clip-empty {
+  padding: 10px 6px;
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--text-faint);
+}
+
+.vl-preview-summary {
+  padding: 7px 9px;
+  margin-top: 8px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+
+.vl-clip-status {
+  min-height: 15px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-error, #e46b6b);
+}
+
 .vl-frame-stage {
   display: flex;
   align-items: center;
@@ -886,6 +1037,20 @@
 
   .vl-frame-modal .vl-modal-description {
     display: none;
+  }
+
+  .vl-preview-config-modal .vl-modal-description,
+  .vl-preview-config-modal .vl-clip-editor .vl-field-hint {
+    display: none;
+  }
+
+  .vl-preview-config-modal .vl-frame-stage {
+    height: 22vh;
+    min-height: 120px;
+  }
+
+  .vl-preview-config-modal .vl-clip-list {
+    max-height: 72px;
   }
 }
 
@@ -1246,6 +1411,37 @@
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 3px;
+}
+
+.vl-preview-setting {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+}
+
+.vl-preview-setting-info {
+  min-width: 0;
+}
+
+.vl-preview-setting .vl-field-label {
+  margin-bottom: 2px;
+}
+
+.vl-preview-setting-summary {
+  overflow: hidden;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vl-preview-setting .vl-small-button {
+  flex: 0 0 auto;
 }
 
 .vl-form-error {

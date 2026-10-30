@@ -3,11 +3,12 @@ import { providerName, t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import { fetchVideoMetadata } from "../metadata";
 import { fallbackTitleFromUrl, normalizeUrlInput, parseVideoUrl } from "../providers";
-import type { ParsedVideo, VideoItem, VideoMetadata } from "../types";
-import { uid, UNCATEGORIZED_ID } from "../types";
+import type { ParsedVideo, PreviewConfig, VideoItem, VideoMetadata } from "../types";
+import { clonePreviewConfig, uid, UNCATEGORIZED_ID } from "../types";
 import { CategoryEditModal } from "./category-modal";
 import { pickVaultFile, TextPromptModal } from "./common";
 import { FramePickerModal } from "./frame-modal";
+import { PreviewConfigModal } from "./preview-config-modal";
 
 type SourceMode = "url" | "local";
 
@@ -18,6 +19,8 @@ export class VideoEditModal extends Modal {
   private metadata: VideoMetadata | null = null;
   private titleTouched: boolean;
   private author?: string;
+  private previewConfig?: PreviewConfig;
+  private previewSummaryEl!: HTMLElement;
 
   private urlInput!: HTMLInputElement;
   private urlStatus!: HTMLElement;
@@ -58,12 +61,19 @@ export class VideoEditModal extends Modal {
     video?: VideoItem | null
   ) {
     super(app);
-    this.item = video ? { ...video, tags: [...video.tags] } : null;
+    this.item = video
+      ? {
+          ...video,
+          tags: [...video.tags],
+          preview: clonePreviewConfig(video.preview)
+        }
+      : null;
     this.sourceMode = video?.provider === "local" ? "local" : "url";
     this.localPath = video?.localPath;
     this.parsed = video?.url ? parseVideoUrl(video.url) : null;
     this.titleTouched = Boolean(video);
     this.author = video?.author;
+    this.previewConfig = clonePreviewConfig(video?.preview);
     this.coverPath = video?.coverPath;
     this.modalEl.addClass("vl-video-modal");
   }
@@ -75,6 +85,7 @@ export class VideoEditModal extends Modal {
     this.buildSourceSection();
     this.buildMainFields();
     this.buildCoverSection();
+    this.buildPreviewSection();
 
     this.pasteHandler = (event: ClipboardEvent) => {
       void this.handlePaste(event);
@@ -281,6 +292,72 @@ export class VideoEditModal extends Modal {
     setIcon(button.createSpan({ cls: "vl-btn-icon" }), icon);
     button.createSpan({ text: label });
     button.addEventListener("click", onClick);
+  }
+
+  private buildPreviewSection(): void {
+    const section = this.contentEl.createDiv({ cls: "vl-form-section vl-preview-setting" });
+    const info = section.createDiv({ cls: "vl-preview-setting-info" });
+    info.createEl("label", { text: t("preview.section"), cls: "vl-field-label" });
+    this.previewSummaryEl = info.createDiv({ cls: "vl-preview-setting-summary" });
+    this.updatePreviewSummary();
+
+    const button = section.createEl("button", {
+      cls: "vl-small-button",
+      attr: { type: "button", "data-vl-action": "preview-settings" }
+    });
+    setIcon(button.createSpan({ cls: "vl-btn-icon" }), "sliders-horizontal");
+    button.createSpan({ text: t("preview.configure") });
+    button.addEventListener("click", () => this.openPreviewSettings());
+  }
+
+  private updatePreviewSummary(): void {
+    if (!this.previewSummaryEl) return;
+    if (!this.previewConfig) {
+      this.previewSummaryEl.setText(t("preview.defaultSummary"));
+      return;
+    }
+    if (this.previewConfig.clips.length === 0) {
+      this.previewSummaryEl.setText(
+        t("preview.summaryEmpty", { duration: this.previewConfig.duration })
+      );
+      return;
+    }
+    this.previewSummaryEl.setText(
+      t("preview.customSummary", {
+        duration: this.previewConfig.duration,
+        count: this.previewConfig.clips.length
+      })
+    );
+  }
+
+  private getEditableVideoSource(): string | null {
+    if (this.sourceMode === "local" && this.localPath) {
+      const file = this.plugin.getLocalFile(this.localPath);
+      return file ? this.app.vault.adapter.getResourcePath(this.localPath) : null;
+    }
+    if (this.sourceMode === "url" && this.parsed?.provider === "direct") {
+      const source = this.normalizeSourceUrl();
+      return source || null;
+    }
+    return null;
+  }
+
+  private openPreviewSettings(): void {
+    const source = this.getEditableVideoSource();
+    if (!source) {
+      new Notice(t("preview.onlyLocal"));
+      return;
+    }
+    new PreviewConfigModal(
+      this.app,
+      source,
+      this.metadata?.duration || this.item?.duration,
+      this.previewConfig,
+      (config) => {
+        this.previewConfig = clonePreviewConfig(config);
+        this.updatePreviewSummary();
+      }
+    ).open();
   }
 
   private populateFields(): void {
@@ -615,13 +692,7 @@ export class VideoEditModal extends Modal {
   }
 
   private captureFromVideo(): void {
-    let source: string | null = null;
-    if (this.sourceMode === "local" && this.localPath) {
-      const file = this.plugin.getLocalFile(this.localPath);
-      if (file) source = this.app.vault.adapter.getResourcePath(this.localPath);
-    } else if (this.sourceMode === "url" && this.parsed?.provider === "direct") {
-      source = this.normalizeSourceUrl();
-    }
+    const source = this.getEditableVideoSource();
     if (!source) {
       new Notice(t("notice.captureFailed"));
       return;
@@ -716,6 +787,7 @@ export class VideoEditModal extends Modal {
         localPath: isLocal ? this.localPath : undefined,
         duration: this.metadata?.duration || this.item?.duration,
         epId: this.metadata?.epId || parsed?.epId || this.item?.epId,
+        preview: this.previewConfig,
         favorite: this.item?.favorite,
         createdAt: this.item?.createdAt || now,
         updatedAt: now

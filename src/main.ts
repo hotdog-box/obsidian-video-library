@@ -9,6 +9,7 @@ import {
   DATA_VERSION,
   LanguageSetting,
   PluginData,
+  sanitizePreviewConfig,
   SortMode,
   uid,
   UNCATEGORIZED_ID,
@@ -107,6 +108,7 @@ export default class VideoLibraryPlugin extends Plugin {
               categoryId:
                 video.categoryId && categoryIds.has(video.categoryId) ? video.categoryId : UNCATEGORIZED_ID,
               tags: Array.isArray(video.tags) ? video.tags.filter(Boolean).map(String) : [],
+              preview: sanitizePreviewConfig(video.preview),
               createdAt: Number(video.createdAt) || Date.now(),
               updatedAt: Number(video.updatedAt) || Number(video.createdAt) || Date.now()
             } as VideoItem;

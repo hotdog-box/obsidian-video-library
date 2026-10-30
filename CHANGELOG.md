@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 — 2026-10-31
+
+- Bilibili bangumi / movie links (`/bangumi/play/ep...`) are now resolved to their video and can be collected directly.
+- Bare Bilibili IDs are accepted: `BV...`, `av...`, `ep...`, `ss...`.
+- Bangumi metadata uses the season title, author, cover and duration, and keeps the episode id for playback.
+- Bilibili page fallback also extracts a `bvid` from the HTML when the API is unavailable.
+
 ## 0.1.0 — 2026-10-30
 
 First working version.

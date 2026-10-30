@@ -32,6 +32,7 @@ export interface VideoItem {
   thumbnailUrl?: string;
   localPath?: string;
   duration?: number;
+  epId?: number;
   favorite?: boolean;
   createdAt: number;
   updatedAt: number;
@@ -58,6 +59,8 @@ export interface ParsedVideo {
   isShortLink?: boolean;
   page?: number;
   vimeoHash?: string;
+  epId?: number;
+  seasonId?: number;
 }
 
 export interface VideoMetadata {
@@ -68,6 +71,7 @@ export interface VideoMetadata {
   canonicalUrl?: string;
   videoId?: string;
   embedUrl?: string;
+  epId?: number;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {

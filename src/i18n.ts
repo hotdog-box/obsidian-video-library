@@ -106,6 +106,7 @@ const en = {
   "player.notes": "Notes",
   "player.meta": "Details",
   "player.embedHint": "If the player stays blank, open the original page in your browser.",
+  "player.bilibiliRestricted": "Bilibili movies and series may require signing in or a premium membership. If the player says it cannot play, use “Open original”.",
 
   "category.manageTitle": "Manage categories",
   "category.manageDesc": "Categories are only for organizing your library. Deleting a category does not delete its videos.",
@@ -290,6 +291,7 @@ const zh: Record<MessageKey, string> = {
   "player.notes": "备注",
   "player.meta": "详细信息",
   "player.embedHint": "如果播放器空白或无法播放，请点“打开原网页”。",
+  "player.bilibiliRestricted": "B 站番剧/影视可能需要登录或大会员。若播放器提示无法播放，请点“打开原网页”观看。",
 
   "category.manageTitle": "管理分类",
   "category.manageDesc": "分类只用于整理视频库。删除分类不会删除里面的视频。",

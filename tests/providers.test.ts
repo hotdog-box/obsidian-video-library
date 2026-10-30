@@ -65,7 +65,30 @@ test("normalizes common pasted links", () => {
   assert.equal(normalizeUrlInput("//youtu.be/dQw4w9WgXcQ"), "https://youtu.be/dQw4w9WgXcQ");
 });
 
+test("accepts bare Bilibili BV, av, ep and ss ids", () => {
+  assert.equal(
+    normalizeUrlInput("BV17f4y1n7et"),
+    "https://www.bilibili.com/video/BV17f4y1n7et"
+  );
+  assert.equal(parseVideoUrl("BV17f4y1n7et")?.videoId, "BV17f4y1n7et");
+  assert.equal(parseVideoUrl("av170001")?.videoId, "av170001");
+  assert.equal(parseVideoUrl("ep419527")?.epId, 419527);
+  assert.equal(parseVideoUrl("ss39104")?.seasonId, 39104);
+});
+
+test("parses Bilibili bangumi ep links", () => {
+  const parsed = parseVideoUrl(
+    "https://www.bilibili.com/bangumi/play/ep419527?theme=movie&from_spmid=666.7.feed.29"
+  );
+  assert.equal(parsed?.provider, "bilibili");
+  assert.equal(parsed?.epId, 419527);
+  assert.equal(parsed?.videoId, undefined);
+  assert.equal(parsed?.canonicalUrl, "https://www.bilibili.com/bangumi/play/ep419527");
+});
+
 test("builds Bilibili embeds for BV and av ids", () => {
   assert.match(buildBilibiliEmbed("BV1xx411c7mD"), /bvid=BV1xx411c7mD/);
   assert.match(buildBilibiliEmbed("av170001"), /aid=170001/);
+  assert.match(buildBilibiliEmbed("BV17f4y1n7et", 1, 419527), /ep_id=419527/);
+  assert.doesNotMatch(buildBilibiliEmbed("BV17f4y1n7et", 1, 419527), /bvid=/);
 });

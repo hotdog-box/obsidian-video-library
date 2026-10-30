@@ -13,7 +13,8 @@
 ## 已经实现的功能
 
 - **视频链接管理**
-  - B 站：`BV` 号、`av` 号、分 P、`b23.tv` 短链
+  - B 站：`BV` 号、`av` 号、分 P、`b23.tv` 短链、番剧/影视 `ep` / `ss` 链接
+  - 直接粘贴 `BV17f4y1n7et`、`av170001`、`ep419527` 这样的视频号也可以
   - YouTube：`watch`、`youtu.be`、`Shorts`
   - Vimeo：普通链接和带私有 hash 的链接
   - MP4 / WebM / MOV 等视频直链

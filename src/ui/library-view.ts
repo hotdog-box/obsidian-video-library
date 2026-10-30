@@ -393,7 +393,7 @@ export class VideoLibraryView extends ItemView {
         actions,
         "external-link",
         t("action.openOriginal"),
-        () => openExternal(video.url),
+        () => openExternal(this.plugin.getVideoPageUrl(video)),
         "vl-card-action"
       );
     }
@@ -455,13 +455,13 @@ export class VideoLibraryView extends ItemView {
         item
           .setTitle(t("action.openOriginal"))
           .setIcon("external-link")
-          .onClick(() => openExternal(video.url))
+          .onClick(() => openExternal(this.plugin.getVideoPageUrl(video)))
       );
       menu.addItem((item) =>
         item
           .setTitle(t("menu.copyLink"))
           .setIcon("copy")
-          .onClick(() => void this.copyText(video.url))
+          .onClick(() => void this.copyText(this.plugin.getVideoPageUrl(video)))
       );
     }
     menu.addSeparator();

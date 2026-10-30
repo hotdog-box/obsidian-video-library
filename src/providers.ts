@@ -22,6 +22,19 @@ const DIRECT_EXTENSIONS = new Set(["mp4", "webm", "ogv", "ogg", "mov", "m4v"]);
 export function normalizeUrlInput(raw: string): string {
   let value = raw.trim();
   if (!value) return value;
+
+  const bv = value.match(/^([Bb][Vv])([0-9A-Za-z]{10})$/);
+  if (bv) return `https://www.bilibili.com/video/BV${bv[2]}`;
+
+  const av = value.match(/^av(\d+)$/i);
+  if (av) return `https://www.bilibili.com/video/av${av[1]}`;
+
+  const ep = value.match(/^ep(\d+)$/i);
+  if (ep) return `https://www.bilibili.com/bangumi/play/ep${ep[1]}`;
+
+  const ss = value.match(/^ss(\d+)$/i);
+  if (ss) return `https://www.bilibili.com/bangumi/play/ss${ss[1]}`;
+
   if (value.startsWith("//")) value = `https:${value}`;
   if (/^www\./i.test(value)) value = `https://${value}`;
   if (/^(m\.)?(bilibili\.com|b23\.tv|youtube\.com|youtu\.be|vimeo\.com)\//i.test(value)) {
@@ -84,13 +97,31 @@ function parseBilibili(url: URL): ParsedVideo {
   const page = Number.isFinite(pageValue) && pageValue > 0 ? Math.floor(pageValue) : 1;
   const host = hostOf(url);
 
+  const epMatch = url.pathname.match(/\/bangumi\/play\/ep(\d+)/i);
+  const ssMatch = url.pathname.match(/\/bangumi\/play\/ss(\d+)/i);
+  const queryEp = Number(url.searchParams.get("ep_id") || "0");
+  const querySeason = Number(url.searchParams.get("season_id") || "0");
+  const epId = epMatch ? Number(epMatch[1]) : queryEp > 0 ? queryEp : undefined;
+  const seasonId = ssMatch ? Number(ssMatch[1]) : querySeason > 0 ? querySeason : undefined;
+
+  let canonicalUrl = url.href;
+  if (videoId) {
+    canonicalUrl = `https://www.bilibili.com/video/${videoId}`;
+  } else if (epId) {
+    canonicalUrl = `https://www.bilibili.com/bangumi/play/ep${epId}`;
+  } else if (seasonId) {
+    canonicalUrl = `https://www.bilibili.com/bangumi/play/ss${seasonId}`;
+  }
+
   return {
     provider: "bilibili",
     videoId,
-    canonicalUrl: videoId ? `https://www.bilibili.com/video/${videoId}` : url.href,
+    canonicalUrl,
     embedUrl: videoId ? buildBilibiliEmbed(videoId, page) : undefined,
     isShortLink: host === "b23.tv",
-    page
+    page,
+    epId,
+    seasonId
   };
 }
 
@@ -159,27 +190,35 @@ export function parseVideoUrl(raw: string): ParsedVideo | null {
   };
 }
 
-export function buildBilibiliEmbed(videoId: string, page = 1): string {
+export function buildBilibiliEmbed(videoId: string | undefined, page = 1, epId?: number): string {
   const params = new URLSearchParams({
     page: String(page),
     high_quality: "1",
     danmaku: "0",
     autoplay: "0"
   });
-  if (/^av\d+$/i.test(videoId)) {
+  if (epId) {
+    params.set("ep_id", String(epId));
+  } else if (videoId && /^av\d+$/i.test(videoId)) {
     params.set("aid", videoId.slice(2));
-  } else {
+  } else if (videoId) {
     params.set("bvid", videoId);
   }
   return `https://player.bilibili.com/player.html?${params.toString()}`;
 }
 
-export function buildEmbedUrl(provider: Provider, videoId?: string, page = 1, vimeoHash?: string): string | undefined {
+export function buildEmbedUrl(
+  provider: Provider,
+  videoId?: string,
+  page = 1,
+  vimeoHash?: string,
+  epId?: number
+): string | undefined {
   if (provider === "youtube" && videoId) {
     return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
   }
-  if (provider === "bilibili" && videoId) {
-    return buildBilibiliEmbed(videoId, page);
+  if (provider === "bilibili" && (videoId || epId)) {
+    return buildBilibiliEmbed(videoId, page, epId);
   }
   if (provider === "vimeo" && videoId) {
     return `https://player.vimeo.com/video/${videoId}${vimeoHash ? `?h=${vimeoHash}` : ""}`;

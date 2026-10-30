@@ -283,6 +283,13 @@ export default class VideoLibraryPlugin extends Plugin {
     return video.url || null;
   }
 
+  getVideoPageUrl(video: VideoItem): string {
+    if (video.provider === "bilibili" && video.epId) {
+      return `https://www.bilibili.com/bangumi/play/ep${video.epId}`;
+    }
+    return video.url;
+  }
+
   async captureCoverFor(video: VideoItem, notify = true): Promise<boolean> {
     const source = this.getVideoSource(video);
     if (!source) {

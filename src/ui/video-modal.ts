@@ -662,6 +662,7 @@ export class VideoEditModal extends Modal {
         thumbnailUrl: this.metadata?.thumbnailUrl || this.item?.thumbnailUrl,
         localPath: isLocal ? this.localPath : undefined,
         duration: this.metadata?.duration || this.item?.duration,
+        epId: this.metadata?.epId || parsed?.epId || this.item?.epId,
         favorite: this.item?.favorite,
         createdAt: this.item?.createdAt || now,
         updatedAt: now

@@ -31,6 +31,10 @@ export class VideoPlayerModal extends Modal {
     const player = contentEl.createDiv({ cls: "vl-player-stage" });
     this.renderPlayer(player);
 
+    if (this.item.provider === "bilibili" && this.item.epId) {
+      contentEl.createEl("p", { text: t("player.bilibiliRestricted"), cls: "vl-player-notice" });
+    }
+
     const meta = contentEl.createDiv({ cls: "vl-player-meta" });
     const badge = meta.createSpan({ text: providerName(this.item.provider), cls: "vl-provider-badge" });
     badge.addClass(`is-${this.item.provider}`);
@@ -64,7 +68,7 @@ export class VideoPlayerModal extends Modal {
       const open = footer.createEl("button", { attr: { type: "button" } });
       setIcon(open.createSpan({ cls: "vl-btn-icon" }), "external-link");
       open.createSpan({ text: t("action.openOriginal") });
-      open.addEventListener("click", () => openExternal(this.item.url));
+      open.addEventListener("click", () => openExternal(this.plugin.getVideoPageUrl(this.item)));
     }
 
     const edit = footer.createEl("button", { attr: { type: "button" } });
@@ -132,11 +136,13 @@ export class VideoPlayerModal extends Modal {
     }
 
     const parsed = this.item.url ? parseVideoUrl(this.item.url) : null;
-    const embed =
-      parsed?.embedUrl ||
-      (this.item.provider === "youtube" || this.item.provider === "bilibili" || this.item.provider === "vimeo"
-        ? buildEmbedUrl(this.item.provider, this.item.videoId)
-        : undefined);
+    const bangumiEpisode = this.item.provider === "bilibili" ? this.item.epId || parsed?.epId : undefined;
+    const embed = bangumiEpisode
+      ? buildEmbedUrl("bilibili", this.item.videoId, 1, undefined, bangumiEpisode)
+      : parsed?.embedUrl ||
+        (this.item.provider === "youtube" || this.item.provider === "bilibili" || this.item.provider === "vimeo"
+          ? buildEmbedUrl(this.item.provider, this.item.videoId, 1, parsed?.vimeoHash, this.item.epId)
+          : undefined);
 
     if (!embed) {
       this.renderWebFallback(container);

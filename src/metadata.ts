@@ -124,28 +124,99 @@ async function resolveBilibiliShortLink(url: string): Promise<{ url: string; met
   const page = await getPage(url);
   const fromMeta = page.meta.canonical;
   const fromHtml = page.html.match(/https?:\/\/www\.bilibili\.com\/video\/(BV[0-9A-Za-z]{10}|av\d+)/i)?.[0];
-  return { url: fromMeta || fromHtml || url, meta: page.meta };
+  const bangumi = page.html.match(/https?:\/\/www\.bilibili\.com\/bangumi\/play\/(ep\d+|ss\d+)/i)?.[0];
+  return { url: fromMeta || fromHtml || bangumi || url, meta: page.meta };
 }
 
-async function fetchBilibili(url: string, parsed: ParsedVideo): Promise<VideoMetadata> {
-  let bvid = parsed.videoId;
-  let canonical = parsed.canonicalUrl;
-  let pageMeta: PageMeta | undefined;
-  const page = parsed.page || 1;
+interface PgcEpisode {
+  ep_id?: number;
+  bvid?: string;
+  title?: string;
+  long_title?: string;
+  cover?: string;
+  duration?: number;
+}
 
-  if (!bvid || parsed.isShortLink) {
+interface PgcResult {
+  title?: string;
+  cover?: string;
+  total?: number;
+  episodes?: PgcEpisode[];
+  up_info?: { uname?: string };
+}
+
+async function fetchBilibiliBangumi(parsed: ParsedVideo): Promise<VideoMetadata | null> {
+  const query = parsed.epId ? `ep_id=${parsed.epId}` : parsed.seasonId ? `season_id=${parsed.seasonId}` : "";
+  if (!query) return null;
+
+  try {
+    const response = await requestUrl({
+      url: `https://api.bilibili.com/pgc/view/web/season?${query}`,
+      method: "GET",
+      headers: {
+        Referer: "https://www.bilibili.com/",
+        Accept: "application/json"
+      }
+    });
+    const json = response.json as { code?: number; result?: PgcResult };
+    const result = json?.result;
+    if (json?.code !== 0 || !result) return null;
+
+    const episodes = Array.isArray(result.episodes) ? result.episodes : [];
+    const episode =
+      episodes.find((candidate) => parsed.epId && candidate.ep_id === parsed.epId) || episodes[0];
+    if (!episode) return null;
+
+    const seasonTitle = (result.title || "").trim();
+    const episodeTitle = (episode.long_title || episode.title || "").trim();
+    const total = Number(result.total) || episodes.length || 1;
+    const title =
+      total > 1 && episodeTitle && episodeTitle !== seasonTitle
+        ? `${seasonTitle} · ${episodeTitle}`
+        : seasonTitle || episodeTitle;
+    const durationMs = Number(episode.duration) || 0;
+    const duration = durationMs > 0 ? Math.max(1, Math.round(durationMs / 1000)) : undefined;
+    const videoId = episode.bvid;
+    const epId = episode.ep_id || parsed.epId;
+
+    return {
+      title,
+      author: result.up_info?.uname,
+      thumbnailUrl: secureMediaUrl(episode.cover || result.cover, "https://www.bilibili.com/"),
+      duration,
+      videoId,
+      canonicalUrl: videoId ? `https://www.bilibili.com/video/${videoId}` : parsed.canonicalUrl,
+      embedUrl: buildBilibiliEmbed(videoId, 1, epId),
+      epId
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBilibili(url: string, initialParsed: ParsedVideo): Promise<VideoMetadata> {
+  let parsed = initialParsed;
+  let pageMeta: PageMeta | undefined;
+
+  if (parsed.isShortLink) {
     try {
       const resolved = await resolveBilibiliShortLink(url);
       const next = parseVideoUrl(resolved.url);
-      if (next?.provider === "bilibili" && next.videoId) {
-        bvid = next.videoId;
-        canonical = next.canonicalUrl;
-        pageMeta = resolved.meta;
-      }
+      if (next?.provider === "bilibili") parsed = next;
+      pageMeta = resolved.meta;
     } catch {
       // The page fallback below will report what it can.
     }
   }
+
+  if (parsed.epId || parsed.seasonId) {
+    const bangumi = await fetchBilibiliBangumi(parsed);
+    if (bangumi) return bangumi;
+  }
+
+  let bvid = parsed.videoId;
+  let canonical = parsed.canonicalUrl;
+  const page = parsed.page || 1;
 
   if (bvid) {
     try {
@@ -177,8 +248,9 @@ async function fetchBilibili(url: string, parsed: ParsedVideo): Promise<VideoMet
           thumbnailUrl: data.pic ? secureMediaUrl(data.pic, "https://www.bilibili.com/") : undefined,
           duration: data.duration,
           videoId: resolvedId,
-          canonicalUrl: `https://www.bilibili.com/video/${resolvedId}${page > 1 ? `?p=${page}` : ""}`,
-          embedUrl: buildBilibiliEmbed(resolvedId, page)
+          canonicalUrl: `https://www.bilibili.com/video/${resolvedId}${parsed.page && parsed.page > 1 ? `?p=${parsed.page}` : ""}`,
+          embedUrl: buildBilibiliEmbed(resolvedId, page),
+          epId: parsed.epId
         };
       }
     } catch {
@@ -190,18 +262,27 @@ async function fetchBilibili(url: string, parsed: ParsedVideo): Promise<VideoMet
     if (!pageMeta) {
       const pageResult = await getPage(canonical.startsWith("http") ? canonical : url);
       pageMeta = pageResult.meta;
+      if (!bvid) {
+        bvid = pageResult.html.match(/"bvid"\s*:\s*"(BV[0-9A-Za-z]{10})"/)?.[1];
+        if (bvid) canonical = `https://www.bilibili.com/video/${bvid}`;
+      }
     }
     return {
       title: pageMeta.title,
       thumbnailUrl: secureMediaUrl(pageMeta.image, "https://www.bilibili.com/"),
       canonicalUrl: bvid
-        ? `https://www.bilibili.com/video/${bvid}${page > 1 ? `?p=${page}` : ""}`
+        ? `https://www.bilibili.com/video/${bvid}${parsed.page && parsed.page > 1 ? `?p=${parsed.page}` : ""}`
         : pageMeta.canonical || canonical,
       videoId: bvid,
-      embedUrl: bvid ? buildBilibiliEmbed(bvid, page) : undefined
+      embedUrl: buildBilibiliEmbed(bvid, page, parsed.epId),
+      epId: parsed.epId
     };
   } catch {
-    return { videoId: bvid, embedUrl: bvid ? buildBilibiliEmbed(bvid, page) : undefined };
+    return {
+      videoId: bvid,
+      embedUrl: buildBilibiliEmbed(bvid, page, parsed.epId),
+      epId: parsed.epId
+    };
   }
 }
 

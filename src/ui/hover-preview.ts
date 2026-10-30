@@ -1,3 +1,4 @@
+import { setIcon } from "obsidian";
 import { t } from "../i18n";
 import { DEFAULT_PREVIEW_DURATION, MAX_PREVIEW_DURATION, type PreviewClip } from "../types";
 
@@ -5,12 +6,20 @@ interface HoverPreviewOptions {
   duration?: number;
   clips?: PreviewClip[];
   fallbackDuration?: number;
+  muted?: boolean;
+  volume?: number;
+  onAudioChange?: (muted: boolean, volume: number) => void;
 }
 
 export class HoverPreview {
   private static active: HoverPreview | null = null;
   private video: HTMLVideoElement | null = null;
   private badge: HTMLElement | null = null;
+  private audioEl: HTMLElement | null = null;
+  private muteButton: HTMLButtonElement | null = null;
+  private volumeSlider: HTMLInputElement | null = null;
+  private muted = true;
+  private volume = 0.8;
   private stopped = false;
   private started = false;
   private segments: PreviewClip[] = [];
@@ -38,10 +47,14 @@ export class HoverPreview {
     HoverPreview.active = this;
 
     this.cover.addClass("is-previewing");
+    this.muted = this.options.muted ?? true;
+    const requestedVolume = Number(this.options.volume);
+    this.volume = Number.isFinite(requestedVolume) ? Math.min(1, Math.max(0, requestedVolume)) : 0.8;
 
     const video = document.createElement("video");
     video.className = "vl-hover-video";
-    video.muted = true;
+    video.muted = this.muted;
+    video.volume = this.volume;
     video.playsInline = true;
     video.preload = "auto";
     video.loop = false;
@@ -55,11 +68,79 @@ export class HoverPreview {
     this.badge.textContent = t("player.preview");
     this.cover.appendChild(this.badge);
 
+    this.buildAudioControls();
+
     video.addEventListener("loadeddata", () => this.prepare(), { once: true });
     video.addEventListener("canplay", () => this.prepare(), { once: true });
     video.addEventListener("timeupdate", () => this.onTimeUpdate());
     video.addEventListener("error", () => this.stop(), { once: true });
     video.load();
+  }
+
+  private buildAudioControls(): void {
+    const audio = document.createElement("div");
+    audio.className = "vl-preview-audio";
+
+    const button = document.createElement("button");
+    button.className = "vl-preview-mute";
+    button.type = "button";
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.muted = !this.muted;
+      if (!this.muted && this.volume <= 0) this.volume = 0.8;
+      this.applyAudio();
+      this.updateAudioUi();
+      this.emitAudioChange();
+    });
+
+    const slider = document.createElement("input");
+    slider.className = "vl-preview-volume";
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "1";
+    slider.step = "0.01";
+    slider.value = String(this.volume);
+    slider.setAttribute("aria-label", t("player.volume"));
+    slider.addEventListener("input", (event) => {
+      event.stopPropagation();
+      this.volume = Math.min(1, Math.max(0, Number(slider.value) || 0));
+      this.muted = this.volume <= 0;
+      this.applyAudio();
+      this.updateAudioUi();
+      this.emitAudioChange();
+    });
+
+    audio.addEventListener("click", (event) => event.stopPropagation());
+    audio.addEventListener("pointerdown", (event) => event.stopPropagation());
+    audio.append(button, slider);
+    this.cover.appendChild(audio);
+    this.audioEl = audio;
+    this.muteButton = button;
+    this.volumeSlider = slider;
+    this.updateAudioUi();
+  }
+
+  private applyAudio(): void {
+    if (!this.video) return;
+    this.video.muted = this.muted;
+    this.video.volume = Math.min(1, Math.max(0, this.volume));
+  }
+
+  private updateAudioUi(): void {
+    if (this.muteButton) {
+      const icon = this.muted || this.volume <= 0 ? "volume-x" : this.volume < 0.5 ? "volume-1" : "volume-2";
+      setIcon(this.muteButton, icon);
+      const label = this.muted ? t("player.unmute") : t("player.mute");
+      this.muteButton.setAttribute("aria-label", label);
+      this.muteButton.setAttribute("title", label);
+    }
+    if (this.volumeSlider && document.activeElement !== this.volumeSlider) {
+      this.volumeSlider.value = String(this.volume);
+    }
+  }
+
+  private emitAudioChange(): void {
+    this.options.onAudioChange?.(this.muted, this.volume);
   }
 
   private prepare(): void {
@@ -115,7 +196,7 @@ export class HoverPreview {
       this.seekTimer = 0;
       this.seeking = false;
       this.lastTime = this.video.currentTime;
-      void this.video.play().catch(() => this.stop());
+      this.playWithFallback();
     };
 
     const onSeeked = () => {
@@ -157,6 +238,21 @@ export class HoverPreview {
     }
   }
 
+  private playWithFallback(): void {
+    if (!this.video || this.stopped) return;
+    this.video.play().catch(() => {
+      if (this.stopped || !this.video) return;
+      if (!this.muted) {
+        this.muted = true;
+        this.applyAudio();
+        this.updateAudioUi();
+        void this.video.play().catch(() => this.stop());
+      } else {
+        this.stop();
+      }
+    });
+  }
+
   private restart(): void {
     if (this.stopped) return;
     this.played = 0;
@@ -179,6 +275,10 @@ export class HoverPreview {
     }
     this.badge?.remove();
     this.badge = null;
+    this.audioEl?.remove();
+    this.audioEl = null;
+    this.muteButton = null;
+    this.volumeSlider = null;
     this.cover.removeClass("is-previewing");
     if (HoverPreview.active === this) HoverPreview.active = null;
   }

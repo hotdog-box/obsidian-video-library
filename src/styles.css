@@ -625,7 +625,7 @@
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  background: rgb(0 0 0 / 18%);
+  background: transparent;
   opacity: 0;
   transition: opacity 140ms ease;
 }
@@ -638,17 +638,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  color: #fff;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: #fff !important;
+  line-height: 1;
   pointer-events: auto;
   cursor: pointer;
-  background: rgb(20 20 20 / 64%);
-  border: 1px solid rgb(255 255 255 / 22%);
+  background: rgb(0 0 0 / 30%) !important;
+  background-color: rgb(0 0 0 / 30%) !important;
+  background-image: none !important;
+  border: 1px solid rgb(255 255 255 / 16%);
   border-radius: 50%;
-  backdrop-filter: blur(8px);
+  box-shadow: none;
+  opacity: 0.82;
+  backdrop-filter: blur(3px);
   transform: translateY(4px);
-  transition: background 120ms ease, transform 140ms ease;
+  transition: background 120ms ease, opacity 120ms ease, transform 140ms ease;
 }
 
 .vl-card:hover .vl-card-action {
@@ -656,12 +662,74 @@
 }
 
 .vl-card-action:hover {
-  background: var(--interactive-accent);
+  color: #fff !important;
+  background: rgb(0 0 0 / 46%) !important;
+  background-color: rgb(0 0 0 / 46%) !important;
+  opacity: 1;
 }
 
 .vl-card-action svg {
+  flex: 0 0 14px;
   width: 14px;
   height: 14px;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 45%));
+}
+
+.vl-preview-audio {
+  position: absolute;
+  bottom: 7px;
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  padding: 2px 5px;
+  pointer-events: auto;
+  background: rgb(0 0 0 / 34%);
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 20px;
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 160ms ease;
+}
+
+.vl-card-cover.is-previewing .vl-preview-audio {
+  opacity: 1;
+}
+
+.vl-preview-mute {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: #fff !important;
+  cursor: pointer;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+.vl-preview-mute:hover {
+  color: #fff;
+  background: rgb(255 255 255 / 14%) !important;
+}
+
+.vl-preview-mute svg {
+  width: 12px;
+  height: 12px;
+}
+
+.vl-preview-volume {
+  width: 38px;
+  height: 12px;
+  padding: 0;
+  cursor: pointer;
+  accent-color: #fff;
 }
 
 .vl-card-body {
@@ -1900,7 +1968,8 @@
   .vl-card-action {
     width: 27px;
     height: 27px;
-    background: rgb(0 0 0 / 58%);
+    background: rgb(0 0 0 / 38%) !important;
+    background-color: rgb(0 0 0 / 38%) !important;
   }
 
   .vl-card-action:not(:first-child) {

@@ -19,6 +19,7 @@ export class VideoLibraryView extends ItemView {
   private query = "";
   private rendered = false;
   private searchTimer = 0;
+  private audioSaveTimer = 0;
   private gridWrap!: HTMLElement;
   private headingEl!: HTMLElement;
   private countEl!: HTMLElement;
@@ -51,6 +52,11 @@ export class VideoLibraryView extends ItemView {
 
   async onClose(): Promise<void> {
     window.clearTimeout(this.searchTimer);
+    if (this.audioSaveTimer) {
+      window.clearTimeout(this.audioSaveTimer);
+      this.audioSaveTimer = 0;
+      void this.plugin.persist();
+    }
     HoverPreview.stopActive();
     this.rendered = false;
     this.bodyEl().empty();
@@ -436,7 +442,10 @@ export class VideoLibraryView extends ItemView {
         preview = new HoverPreview(previewSource, cover, {
           duration: video.preview?.duration,
           clips: video.preview?.clips,
-          fallbackDuration: video.duration
+          fallbackDuration: video.duration,
+          muted: this.plugin.data.settings.previewMuted,
+          volume: this.plugin.data.settings.previewVolume,
+          onAudioChange: (muted, volume) => this.savePreviewAudio(muted, volume)
         });
         preview.start();
       });
@@ -461,8 +470,7 @@ export class VideoLibraryView extends ItemView {
 
   private showContextMenu(event: MouseEvent, video: VideoItem): void {
     HoverPreview.stopActive();
-    const menu = new Menu();
-    menu.addItem((item) =>
+    const menu = new Menu();    menu.addItem((item) =>
       item
         .setTitle(t("action.play"))
         .setIcon("play")
@@ -504,6 +512,16 @@ export class VideoLibraryView extends ItemView {
         .onClick(() => this.confirmDelete(video))
     );
     menu.showAtMouseEvent(event);
+  }
+
+  private savePreviewAudio(muted: boolean, volume: number): void {
+    this.plugin.data.settings.previewMuted = muted;
+    this.plugin.data.settings.previewVolume = Math.min(1, Math.max(0, volume));
+    window.clearTimeout(this.audioSaveTimer);
+    this.audioSaveTimer = window.setTimeout(() => {
+      this.audioSaveTimer = 0;
+      void this.plugin.persist();
+    }, 250);
   }
 
   private async copyText(value: string): Promise<void> {

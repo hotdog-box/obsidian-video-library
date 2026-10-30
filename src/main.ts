@@ -119,6 +119,10 @@ export default class VideoLibraryPlugin extends Plugin {
       ...base.settings,
       ...(loaded.settings || {})
     };
+    if (typeof settings.previewMuted !== "boolean") settings.previewMuted = true;
+    settings.previewVolume = Number.isFinite(Number(settings.previewVolume))
+      ? Math.min(1, Math.max(0, Number(settings.previewVolume)))
+      : 0.8;
 
     this.data = {
       version: DATA_VERSION,

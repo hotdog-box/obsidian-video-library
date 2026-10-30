@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7 — 2026-10-31
+
+- Hover preview now has a mute/unmute button and a volume slider.
+- The last mute state and volume are remembered for the next hover preview.
+- Audio follows the configured clip sequence and loops with the video.
+- Made card play/edit buttons more transparent and slimmer, with clearer icons.
+
 ## 0.1.6 — 2026-10-31
 
 - The configured hover preview now loops continuously while the pointer stays on the card.

@@ -87,6 +87,8 @@ export interface PluginSettings {
   language: LanguageSetting;
   sort: SortMode;
   cardSize: CardSize;
+  previewMuted: boolean;
+  previewVolume: number;
 }
 
 export interface PluginData {
@@ -122,7 +124,9 @@ export interface VideoMetadata {
 export const DEFAULT_SETTINGS: PluginSettings = {
   language: "auto",
   sort: "newest",
-  cardSize: "medium"
+  cardSize: "medium",
+  previewMuted: true,
+  previewVolume: 0.8
 };
 
 export function createDefaultData(): PluginData {

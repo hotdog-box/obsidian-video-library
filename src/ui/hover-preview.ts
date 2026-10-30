@@ -94,7 +94,7 @@ export class HoverPreview {
   private startSegment(index: number): void {
     if (this.stopped || !this.video) return;
     if (index >= this.segments.length) {
-      this.video.pause();
+      this.restart();
       return;
     }
     const segment = this.segments[index];
@@ -149,12 +149,19 @@ export class HoverPreview {
     );
 
     if (this.played >= maxDuration - 0.02) {
-      this.video.pause();
+      this.restart();
       return;
     }
     if (time >= this.currentSegment.end - 0.04) {
       this.startSegment(this.segmentIndex + 1);
     }
+  }
+
+  private restart(): void {
+    if (this.stopped) return;
+    this.played = 0;
+    this.segmentIndex = 0;
+    this.startSegment(0);
   }
 
   stop(): void {

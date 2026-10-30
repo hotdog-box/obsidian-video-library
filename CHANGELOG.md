@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6 — 2026-10-31
+
+- The configured hover preview now loops continuously while the pointer stays on the card.
+- After the last clip, or when the total preview duration is reached, playback restarts from the first clip.
+- Leaving the card still stops and removes the preview immediately.
+
 ## 0.1.5 — 2026-10-31
 
 - Per-video hover preview settings: choose the total preview duration and one or more clips.

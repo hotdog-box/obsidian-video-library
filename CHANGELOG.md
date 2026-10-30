@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8 — 2026-10-31
+
+- Multi-select with card checkboxes, Ctrl/Cmd click and Shift range selection.
+- Drag a box over empty space to select cards; Shift adds and Ctrl removes from the selection.
+- Select all, invert selection and clear selection actions.
+- Batch move to category, batch favorite/unfavorite, batch rename (find and replace) and batch delete.
+- Batch actions work in every filter, category and search result view.
+
 ## 0.1.7 — 2026-10-31
 
 - Hover preview now has a mute/unmute button and a volume slider.

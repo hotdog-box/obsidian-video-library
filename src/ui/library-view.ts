@@ -1,6 +1,7 @@
 import { ItemView, Menu, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import { ConfirmModal, formatDate, iconButton, openExternal } from "./common";
 import { HoverPreview } from "./hover-preview";
+import { BatchRenameModal } from "./batch-rename-modal";
 import { formatDuration, providerName, t, type MessageKey } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { SortMode, VideoItem } from "../types";
@@ -26,6 +27,17 @@ export class VideoLibraryView extends ItemView {
   private searchInput!: HTMLInputElement;
   private clearSearchEl!: HTMLElement;
   private navItems = new Map<string, HTMLElement>();
+  private selectedIds = new Set<string>();
+  private lastSelectedId: string | null = null;
+  private visibleVideoIds: string[] = [];
+  private selectionBar!: HTMLElement;
+  private selectionCountEl!: HTMLElement;
+  private batchCategorySelect!: HTMLSelectElement;
+  private marqueeEl: HTMLElement | null = null;
+  private marqueeStart: { x: number; y: number; mode: "replace" | "add" | "subtract" } | null = null;
+  private marqueeMoved = false;
+  private marqueeMoveHandler = (event: PointerEvent) => this.onMarqueeMove(event);
+  private marqueeUpHandler = (event: PointerEvent) => this.onMarqueeUp(event);
 
   constructor(leaf: WorkspaceLeaf, private plugin: VideoLibraryPlugin) {
     super(leaf);
@@ -52,6 +64,9 @@ export class VideoLibraryView extends ItemView {
 
   async onClose(): Promise<void> {
     window.clearTimeout(this.searchTimer);
+    this.removeMarqueeListeners();
+    this.marqueeEl?.remove();
+    this.marqueeEl = null;
     if (this.audioSaveTimer) {
       window.clearTimeout(this.audioSaveTimer);
       this.audioSaveTimer = 0;
@@ -69,6 +84,10 @@ export class VideoLibraryView extends ItemView {
   refresh(): void {
     if (!this.rendered) return;
     HoverPreview.stopActive();
+    const existingIds = new Set(this.plugin.data.videos.map((video) => video.id));
+    for (const id of [...this.selectedIds]) {
+      if (!existingIds.has(id)) this.selectedIds.delete(id);
+    }
     if (
       this.filter !== "all" &&
       this.filter !== "favorites" &&
@@ -185,6 +204,7 @@ export class VideoLibraryView extends ItemView {
     if (filter !== "all" && filter !== "favorites" && filter !== UNCATEGORIZED_ID) {
       if (!this.plugin.getCategory(filter)) this.filter = "all";
     }
+    this.clearSelection();
     this.updateNavActive();
     this.renderGrid();
     const main = this.bodyEl().querySelector<HTMLElement>(".vl-main");
@@ -226,6 +246,7 @@ export class VideoLibraryView extends ItemView {
     });
     this.searchInput.addEventListener("input", () => {
       this.query = this.searchInput.value;
+      this.clearSelection();
       this.clearSearchEl.toggleClass("is-hidden", !this.query);
       window.clearTimeout(this.searchTimer);
       this.searchTimer = window.setTimeout(() => this.renderGrid(), 120);
@@ -255,7 +276,9 @@ export class VideoLibraryView extends ItemView {
     add.createSpan({ text: t("action.add") });
     add.addEventListener("click", () => this.openAdd());
 
+    this.buildSelectionBar(main);
     this.gridWrap = main.createDiv({ cls: "vl-grid-wrap" });
+    this.gridWrap.addEventListener("pointerdown", (event) => this.onGridPointerDown(event));
     this.updateNavActive();
   }
 
@@ -264,6 +287,283 @@ export class VideoLibraryView extends ItemView {
     if (this.filter === "favorites") return t("nav.favorites");
     if (this.filter === UNCATEGORIZED_ID) return t("nav.uncategorized");
     return this.plugin.categoryName(this.filter);
+  }
+
+  private buildSelectionBar(parent: HTMLElement): void {
+    this.selectionBar = parent.createDiv({ cls: "vl-selection-bar is-hidden" });
+    const head = this.selectionBar.createDiv({ cls: "vl-selection-head" });
+    this.selectionCountEl = head.createSpan({ cls: "vl-selection-count" });
+
+    const quick = head.createDiv({ cls: "vl-selection-quick" });
+    this.selectionButton(quick, "check-check", t("selection.selectAll"), () => this.selectAllVisible());
+    this.selectionButton(quick, "repeat-2", t("selection.invert"), () => this.invertSelection());
+    this.selectionButton(quick, "x", t("selection.clear"), () => this.clearSelection());
+
+    const actions = this.selectionBar.createDiv({ cls: "vl-selection-actions" });
+    this.batchCategorySelect = actions.createEl("select", {
+      cls: "dropdown vl-batch-category",
+      attr: { "aria-label": t("selection.moveTo") }
+    });
+    this.batchCategorySelect.createEl("option", { text: t("selection.moveTo"), value: "", attr: { disabled: "true", selected: "true" } });
+    this.batchCategorySelect.createEl("option", {
+      text: t("category.uncategorizedName"),
+      value: UNCATEGORIZED_ID
+    });
+    for (const category of this.plugin.data.categories) {
+      this.batchCategorySelect.createEl("option", { text: category.name, value: category.id });
+    }
+    this.batchCategorySelect.addEventListener("change", () => {
+      const value = this.batchCategorySelect.value;
+      this.batchCategorySelect.value = "";
+      if (value) void this.batchSetCategory(value);
+    });
+
+    this.selectionButton(actions, "star", t("selection.favorite"), () => void this.batchFavorite(true));
+    this.selectionButton(actions, "star-off", t("selection.unfavorite"), () => void this.batchFavorite(false));
+    this.selectionButton(actions, "pencil", t("selection.rename"), () => this.openBatchRename());
+    this.selectionButton(actions, "trash-2", t("selection.delete"), () => this.confirmBatchDelete(), "is-danger");
+
+    this.selectionBar.createDiv({ text: t("selection.hint"), cls: "vl-selection-hint" });
+  }
+
+  private selectionButton(
+    parent: HTMLElement,
+    icon: string,
+    label: string,
+    onClick: () => void,
+    className = ""
+  ): void {
+    const button = parent.createEl("button", {
+      cls: `vl-selection-btn ${className}`.trim(),
+      attr: { type: "button" }
+    });
+    setIcon(button.createSpan({ cls: "vl-btn-icon" }), icon);
+    button.createSpan({ text: label });
+    button.addEventListener("click", onClick);
+  }
+
+  private updateSelectionUi(): void {
+    if (!this.selectionBar) return;
+    const count = this.selectedIds.size;
+    this.selectionBar.toggleClass("is-hidden", count === 0);
+    this.selectionCountEl.setText(t("selection.selected", { count }));
+
+    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+      const id = card.dataset.videoId || "";
+      const selected = this.selectedIds.has(id);
+      card.toggleClass("is-selected", selected);
+      const check = card.querySelector(".vl-card-check") as HTMLElement | null;
+      if (check) {
+        check.toggleClass("is-checked", selected);
+        check.setAttribute("aria-pressed", selected ? "true" : "false");
+        check.setAttribute("title", selected ? t("selection.uncheck") : t("selection.check"));
+        setIcon(check, selected ? "check" : "square");
+      }
+    }
+  }
+
+  private clearSelection(): void {
+    this.selectedIds.clear();
+    this.lastSelectedId = null;
+    this.updateSelectionUi();
+  }
+
+  private selectAllVisible(): void {
+    this.selectedIds = new Set(this.visibleVideoIds);
+    this.lastSelectedId = this.visibleVideoIds[this.visibleVideoIds.length - 1] || null;
+    this.updateSelectionUi();
+  }
+
+  private invertSelection(): void {
+    this.selectedIds = new Set(this.visibleVideoIds.filter((id) => !this.selectedIds.has(id)));
+    this.lastSelectedId = this.visibleVideoIds[this.visibleVideoIds.length - 1] || null;
+    this.updateSelectionUi();
+  }
+
+  private toggleSelection(id: string, event: MouseEvent): void {
+    if (event.shiftKey && this.lastSelectedId) {
+      const start = this.visibleVideoIds.indexOf(this.lastSelectedId);
+      const end = this.visibleVideoIds.indexOf(id);
+      if (start >= 0 && end >= 0) {
+        const [from, to] = start < end ? [start, end] : [end, start];
+        for (let index = from; index <= to; index += 1) {
+          this.selectedIds.add(this.visibleVideoIds[index]);
+        }
+        this.lastSelectedId = id;
+        this.updateSelectionUi();
+        return;
+      }
+    }
+
+    if (this.selectedIds.has(id)) {
+      this.selectedIds.delete(id);
+    } else {
+      this.selectedIds.add(id);
+    }
+    this.lastSelectedId = id;
+    this.updateSelectionUi();
+  }
+
+  private selectedVideos(): VideoItem[] {
+    return this.plugin.data.videos.filter((video) => this.selectedIds.has(video.id));
+  }
+
+  private async batchSetCategory(categoryId: string): Promise<void> {
+    const ids = new Set(this.selectedIds);
+    if (ids.size === 0) return;
+    await this.plugin.updateVideos(ids, (video) => {
+      video.categoryId = categoryId;
+    });
+    new Notice(t("selection.categoryChanged", { count: ids.size }));
+    this.clearSelection();
+  }
+
+  private async batchFavorite(favorite: boolean): Promise<void> {
+    const ids = new Set(this.selectedIds);
+    if (ids.size === 0) return;
+    await this.plugin.updateVideos(ids, (video) => {
+      video.favorite = favorite;
+    });
+    new Notice(t("selection.favoriteChanged"));
+    this.clearSelection();
+  }
+
+  private openBatchRename(): void {
+    const count = this.selectedIds.size;
+    if (count === 0) return;
+    new BatchRenameModal(this.app, count, (find, replace) => {
+      void (async () => {
+        const ids = new Set(this.selectedIds);
+        let changed = 0;
+        await this.plugin.updateVideos(ids, (video) => {
+          if (!video.title.includes(find)) return;
+          video.title = video.title.split(find).join(replace).trim() || t("misc.untitled");
+          changed += 1;
+        });
+        new Notice(
+          changed > 0
+            ? t("selection.renamed", { count: changed })
+            : t("selection.noMatch", { find })
+        );
+        this.clearSelection();
+      })();
+    }).open();
+  }
+
+  private confirmBatchDelete(): void {
+    const videos = this.selectedVideos();
+    if (videos.length === 0) return;
+    new ConfirmModal(this.app, {
+      title: t("selection.deleteTitle", { count: videos.length }),
+      description: t("selection.deleteDesc"),
+      confirmText: t("confirm.delete"),
+      danger: true,
+      onConfirm: async () => {
+        await this.plugin.deleteVideos(videos);
+        new Notice(t("selection.deleted", { count: videos.length }));
+        this.clearSelection();
+      }
+    }).open();
+  }
+
+  private onGridPointerDown(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest(".vl-card, button, input, select, a, .vl-empty")) return;
+    event.preventDefault();
+
+    this.removeMarqueeListeners();
+    this.marqueeEl?.remove();
+    this.marqueeStart = {
+      x: event.clientX,
+      y: event.clientY,
+      mode: event.ctrlKey || event.metaKey ? "subtract" : event.shiftKey ? "add" : "replace"
+    };
+    this.marqueeMoved = false;
+
+    const marquee = document.createElement("div");
+    marquee.className = "vl-marquee";
+    marquee.style.display = "none";
+    document.body.appendChild(marquee);
+    this.marqueeEl = marquee;
+
+    window.addEventListener("pointermove", this.marqueeMoveHandler);
+    window.addEventListener("pointerup", this.marqueeUpHandler);
+  }
+
+  private onMarqueeMove(event: PointerEvent): void {
+    if (!this.marqueeStart || !this.marqueeEl) return;
+    const dx = event.clientX - this.marqueeStart.x;
+    const dy = event.clientY - this.marqueeStart.y;
+    if (!this.marqueeMoved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+    this.marqueeMoved = true;
+
+    const left = Math.min(this.marqueeStart.x, event.clientX);
+    const top = Math.min(this.marqueeStart.y, event.clientY);
+    const width = Math.abs(dx);
+    const height = Math.abs(dy);
+    this.marqueeEl.style.display = "block";
+    this.marqueeEl.style.left = `${left}px`;
+    this.marqueeEl.style.top = `${top}px`;
+    this.marqueeEl.style.width = `${width}px`;
+    this.marqueeEl.style.height = `${height}px`;
+
+    const hits = new Set(this.marqueeHits({ left, top, right: left + width, bottom: top + height }));
+    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+      card.toggleClass("is-marquee-hit", hits.has(card.dataset.videoId || ""));
+    }
+  }
+
+  private onMarqueeUp(event: PointerEvent): void {
+    if (!this.marqueeStart) return;
+    const mode = this.marqueeStart.mode;
+    const hits = this.marqueeMoved
+      ? this.marqueeHits({
+          left: Math.min(this.marqueeStart.x, event.clientX),
+          top: Math.min(this.marqueeStart.y, event.clientY),
+          right: Math.max(this.marqueeStart.x, event.clientX),
+          bottom: Math.max(this.marqueeStart.y, event.clientY)
+        })
+      : [];
+
+    this.removeMarqueeListeners();
+    this.marqueeEl?.remove();
+    this.marqueeEl = null;
+    this.marqueeStart = null;
+    this.marqueeMoved = false;
+
+    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+      card.removeClass("is-marquee-hit");
+    }
+
+    if (mode === "replace") {
+      this.selectedIds = new Set(hits);
+    } else if (mode === "add") {
+      for (const id of hits) this.selectedIds.add(id);
+    } else {
+      for (const id of hits) this.selectedIds.delete(id);
+    }
+    this.lastSelectedId = hits[hits.length - 1] || null;
+    this.updateSelectionUi();
+  }
+
+  private marqueeHits(rect: { left: number; top: number; right: number; bottom: number }): string[] {
+    const hits: string[] = [];
+    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+      const cardRect = card.getBoundingClientRect();
+      const intersects =
+        cardRect.left < rect.right &&
+        cardRect.right > rect.left &&
+        cardRect.top < rect.bottom &&
+        cardRect.bottom > rect.top;
+      if (intersects && card.dataset.videoId) hits.push(card.dataset.videoId);
+    }
+    return hits;
+  }
+
+  private removeMarqueeListeners(): void {
+    window.removeEventListener("pointermove", this.marqueeMoveHandler);
+    window.removeEventListener("pointerup", this.marqueeUpHandler);
   }
 
   private filteredVideos(): VideoItem[] {
@@ -305,12 +605,18 @@ export class VideoLibraryView extends ItemView {
   private renderGrid(): void {
     if (!this.gridWrap) return;
     const videos = this.filteredVideos();
+    this.visibleVideoIds = videos.map((video) => video.id);
+    const existing = new Set(this.visibleVideoIds);
+    for (const id of [...this.selectedIds]) {
+      if (!existing.has(id)) this.selectedIds.delete(id);
+    }
     this.headingEl.setText(this.filterName());
     this.countEl.setText(t(videos.length === 1 ? "count.one" : "count.many", { count: videos.length }));
     this.gridWrap.empty();
 
     if (videos.length === 0) {
       this.renderEmpty();
+      this.updateSelectionUi();
       return;
     }
 
@@ -318,6 +624,7 @@ export class VideoLibraryView extends ItemView {
     for (const video of videos) {
       this.renderCard(grid, video);
     }
+    this.updateSelectionUi();
   }
 
   private renderEmpty(): void {
@@ -356,6 +663,21 @@ export class VideoLibraryView extends ItemView {
     card.dataset.provider = video.provider;
     card.dataset.videoId = video.id;
     const cover = card.createDiv({ cls: "vl-card-cover" });
+    const check = cover.createEl("button", {
+      cls: "vl-card-check",
+      attr: {
+        type: "button",
+        title: t("selection.check"),
+        "aria-label": t("selection.check"),
+        "aria-pressed": "false"
+      }
+    });
+    setIcon(check, "square");
+    check.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.toggleSelection(video.id, event);
+    });
+
     const placeholder = cover.createDiv({ cls: "vl-card-placeholder" });
     setIcon(placeholder.createSpan({ cls: "vl-card-placeholder-icon" }), "film");
 
@@ -455,7 +777,14 @@ export class VideoLibraryView extends ItemView {
       });
     }
 
-    card.addEventListener("click", () => this.openPlayer(video));
+    card.addEventListener("click", (event) => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+        event.preventDefault();
+        this.toggleSelection(video.id, event);
+        return;
+      }
+      this.openPlayer(video);
+    });
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();

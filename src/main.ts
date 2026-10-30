@@ -253,6 +253,27 @@ export default class VideoLibraryPlugin extends Plugin {
     this.refreshViews();
   }
 
+  async deleteVideos(videos: VideoItem[]): Promise<void> {
+    const ids = new Set(videos.map((video) => video.id));
+    this.data.videos = this.data.videos.filter((candidate) => !ids.has(candidate.id));
+    for (const video of videos) {
+      await this.coverStore.delete(video.coverPath);
+    }
+    await this.persist();
+    this.refreshViews();
+  }
+
+  async updateVideos(ids: Set<string>, mutate: (video: VideoItem) => void): Promise<void> {
+    const now = Date.now();
+    for (const video of this.data.videos) {
+      if (!ids.has(video.id)) continue;
+      mutate(video);
+      video.updatedAt = now;
+    }
+    await this.persist();
+    this.refreshViews();
+  }
+
   async toggleFavorite(video: VideoItem): Promise<void> {
     const target = this.data.videos.find((candidate) => candidate.id === video.id);
     if (!target) return;

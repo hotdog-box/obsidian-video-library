@@ -803,7 +803,151 @@
   opacity: 0.8;
 }
 
-/* ---------- Empty ---------- */
+/* ---------- Selection ---------- */
+
+.vl-selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 9px 11px;
+  margin-bottom: 13px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 9px;
+}
+
+.vl-selection-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.vl-selection-count {
+  min-width: 64px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-normal);
+}
+
+.vl-selection-quick,
+.vl-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.vl-selection-actions {
+  padding-left: 9px;
+  border-left: 1px solid var(--background-modifier-border);
+}
+
+.vl-selection-btn {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 27px;
+  padding: 0 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: var(--background-primary) !important;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.vl-selection-btn:hover {
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
+.vl-selection-btn.is-danger {
+  color: var(--text-error, #e46b6b);
+}
+
+.vl-selection-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.vl-batch-category {
+  height: 27px;
+  max-width: 145px;
+  padding: 0 5px;
+  font-size: 10px;
+}
+
+.vl-selection-hint {
+  flex-basis: 100%;
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.vl-card-check {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  color: #fff !important;
+  cursor: pointer;
+  background: rgb(0 0 0 / 34%) !important;
+  background-color: rgb(0 0 0 / 34%) !important;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 5px;
+  box-shadow: none;
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.vl-card:hover .vl-card-check,
+.vl-card-check.is-checked,
+.vl-card.is-selected .vl-card-check {
+  opacity: 1;
+}
+
+.vl-card-check.is-checked {
+  background: var(--interactive-accent) !important;
+  background-color: var(--interactive-accent) !important;
+  border-color: var(--interactive-accent);
+}
+
+.vl-card-check svg {
+  width: 13px;
+  height: 13px;
+}
+
+.vl-card-provider {
+  left: 34px;
+}
+
+.vl-card.is-selected {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 24%, transparent), 0 8px 22px rgb(0 0 0 / 10%);
+}
+
+.vl-card.is-marquee-hit {
+  outline: 2px dashed var(--interactive-accent);
+  outline-offset: -2px;
+}
+
+.vl-marquee {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgb(124 58 237 / 12%);
+  border: 1px solid var(--interactive-accent);
+  border-radius: 3px;
+}
 
 .vl-empty {
   display: flex;
@@ -862,6 +1006,10 @@
 
 .modal.vl-category-modal {
   width: min(520px, 92vw);
+}
+
+.modal.vl-rename-modal {
+  width: min(480px, 92vw);
 }
 
 .modal.vl-prompt-modal,

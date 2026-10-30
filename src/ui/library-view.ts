@@ -1,5 +1,6 @@
 import { ItemView, Menu, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import { ConfirmModal, formatDate, iconButton, openExternal } from "./common";
+import { HoverPreview } from "./hover-preview";
 import { formatDuration, providerName, t, type MessageKey } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { SortMode, VideoItem } from "../types";
@@ -49,6 +50,7 @@ export class VideoLibraryView extends ItemView {
 
   async onClose(): Promise<void> {
     window.clearTimeout(this.searchTimer);
+    HoverPreview.stopActive();
     this.rendered = false;
     this.bodyEl().empty();
   }
@@ -59,6 +61,7 @@ export class VideoLibraryView extends ItemView {
 
   refresh(): void {
     if (!this.rendered) return;
+    HoverPreview.stopActive();
     if (
       this.filter !== "all" &&
       this.filter !== "favorites" &&
@@ -423,6 +426,21 @@ export class VideoLibraryView extends ItemView {
 
     const date = body.createDiv({ cls: "vl-card-date", text: formatDate(video.createdAt) });
 
+    const previewSource =
+      video.provider === "local" || video.provider === "direct" ? this.plugin.getVideoSource(video) : null;
+    let preview: HoverPreview | null = null;
+    if (previewSource) {
+      card.addEventListener("mouseenter", () => {
+        preview?.stop();
+        preview = new HoverPreview(previewSource, cover);
+        preview.start();
+      });
+      card.addEventListener("mouseleave", () => {
+        preview?.stop();
+        preview = null;
+      });
+    }
+
     card.addEventListener("click", () => this.openPlayer(video));
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -437,6 +455,7 @@ export class VideoLibraryView extends ItemView {
   }
 
   private showContextMenu(event: MouseEvent, video: VideoItem): void {
+    HoverPreview.stopActive();
     const menu = new Menu();
     menu.addItem((item) =>
       item
@@ -488,10 +507,12 @@ export class VideoLibraryView extends ItemView {
   }
 
   private openEdit(video: VideoItem): void {
+    HoverPreview.stopActive();
     new VideoEditModal(this.app, this.plugin, video).open();
   }
 
   private openPlayer(video: VideoItem): void {
+    HoverPreview.stopActive();
     new VideoPlayerModal(this.app, this.plugin, video).open();
   }
 

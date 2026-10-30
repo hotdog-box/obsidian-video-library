@@ -117,6 +117,7 @@ const en = {
   "player.localMissingDesc": "The file may have been moved or renamed. Edit this item and choose the video again.",
   "player.notes": "Notes",
   "player.meta": "Details",
+  "player.preview": "Preview",
   "player.embedHint": "If the player stays blank, open the original page in your browser.",
   "player.bilibiliRestricted": "Bilibili movies and series may require signing in or a premium membership. If the player says it cannot play, use “Open original”.",
 
@@ -318,6 +319,7 @@ const zh: Record<MessageKey, string> = {
   "player.localMissingDesc": "文件可能被移动或改名了。编辑这一项，重新选择视频。",
   "player.notes": "备注",
   "player.meta": "详细信息",
+  "player.preview": "预览",
   "player.embedHint": "如果播放器空白或无法播放，请点“打开原网页”。",
   "player.bilibiliRestricted": "B 站番剧/影视可能需要登录或大会员。若播放器提示无法播放，请点“打开原网页”观看。",
 

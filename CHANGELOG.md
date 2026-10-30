@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4 — 2026-10-31
+
+- Hovering a local or direct-URL video card starts a muted 4-second preview.
+- Moving the pointer away stops and removes the preview immediately.
+- Only one preview plays at a time; no player iframe is created for online cards.
+- Added a small “Preview” badge on the cover while previewing.
+
 ## 0.1.3 — 2026-10-31
 
 - Choose any frame from a local video or a direct video URL as the cover.

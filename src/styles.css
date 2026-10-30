@@ -768,6 +768,94 @@
   width: min(440px, 92vw);
 }
 
+.modal.vl-frame-modal {
+  width: min(860px, 95vw);
+  max-width: 95vw;
+}
+
+.vl-frame-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: min(50vh, 440px);
+  min-height: 180px;
+  overflow: hidden;
+  background: #000;
+  border-radius: 9px;
+}
+
+.vl-frame-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.vl-frame-timeline {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.vl-frame-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--interactive-accent);
+}
+
+.vl-frame-time {
+  flex: 0 0 auto;
+  min-width: 86px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.vl-frame-buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.vl-frame-buttons button {
+  padding: 4px 9px;
+  font-size: 10px;
+}
+
+.vl-frame-status {
+  min-height: 16px;
+  margin-top: 7px;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.vl-frame-status:empty {
+  display: none;
+}
+
+.vl-frame-status.is-error {
+  color: var(--text-error, #e46b6b);
+}
+
+.vl-frame-modal .vl-modal-buttons {
+  margin-top: 10px;
+}
+
+@media (max-height: 650px) {
+  .vl-frame-stage {
+    height: 32vh;
+    min-height: 140px;
+  }
+
+  .vl-frame-modal .vl-modal-description {
+    display: none;
+  }
+}
+
 .vl-modal-description {
   margin: -2px 0 18px;
   font-size: 12px;

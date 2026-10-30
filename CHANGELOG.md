@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3 — 2026-10-31
+
+- Choose any frame from a local video or a direct video URL as the cover.
+- New frame picker with a video preview, draggable timeline, play/pause and ±1s controls.
+- Handles WebM files whose duration is only known after seeking, so the timeline still works.
+- Online Bilibili / YouTube / Vimeo players remain non-capturable because of browser cross-origin restrictions; use the clipboard screenshot cover instead.
+
 ## 0.1.2 — 2026-10-31
 
 - Paste a screenshot from the clipboard directly as the video cover (`Ctrl+V`, or `Cmd+V` on macOS).

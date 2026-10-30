@@ -7,6 +7,7 @@ import type { ParsedVideo, VideoItem, VideoMetadata } from "../types";
 import { uid, UNCATEGORIZED_ID } from "../types";
 import { CategoryEditModal } from "./category-modal";
 import { pickVaultFile, TextPromptModal } from "./common";
+import { FramePickerModal } from "./frame-modal";
 
 type SourceMode = "url" | "local";
 
@@ -613,7 +614,7 @@ export class VideoEditModal extends Modal {
     this.updateCoverButtons();
   }
 
-  private async captureFromVideo(): Promise<void> {
+  private captureFromVideo(): void {
     let source: string | null = null;
     if (this.sourceMode === "local" && this.localPath) {
       const file = this.plugin.getLocalFile(this.localPath);
@@ -625,15 +626,17 @@ export class VideoEditModal extends Modal {
       new Notice(t("notice.captureFailed"));
       return;
     }
-    this.coverStatus.setText(t("form.coverCapturing"));
-    const buffer = await this.plugin.coverStore.captureVideoFrame(source);
-    if (!buffer) {
-      this.coverStatus.setText(t("notice.captureFailed"));
-      new Notice(t("notice.captureFailed"));
-      return;
-    }
-    this.setCoverBuffer(buffer, "jpg");
-    this.coverStatus.setText("");
+
+    new FramePickerModal(
+      this.app,
+      this.plugin.coverStore,
+      source,
+      this.metadata?.duration || this.item?.duration,
+      (buffer) => {
+        this.setCoverBuffer(buffer, "jpg");
+        this.coverStatus.setText(t("form.coverFrameSelected"));
+      }
+    ).open();
   }
 
   private async save(): Promise<void> {

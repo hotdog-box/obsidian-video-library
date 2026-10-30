@@ -194,9 +194,22 @@ export class CoverStore {
         await waitForEvent(video, "loadeddata", 10000);
       }
 
+      return await this.captureVideoElement(video);
+    } catch {
+      return null;
+    } finally {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      video.remove();
+    }
+  }
+
+  async captureVideoElement(video: HTMLVideoElement): Promise<ArrayBuffer | null> {
+    try {
       const width = video.videoWidth;
       const height = video.videoHeight;
-      if (!width || !height) return null;
+      if (!width || !height || video.readyState < 2) return null;
       const maxWidth = 1280;
       const scale = Math.min(1, maxWidth / width);
       const canvas = document.createElement("canvas");
@@ -205,15 +218,10 @@ export class CoverStore {
       const context = canvas.getContext("2d");
       if (!context) return null;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.84));
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
       return blob ? await blob.arrayBuffer() : null;
     } catch {
       return null;
-    } finally {
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-      video.remove();
     }
   }
 

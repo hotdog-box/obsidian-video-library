@@ -1,6 +1,6 @@
 {
   "name": "obsidian-video-library",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "An Obsidian plugin to collect, organize and watch video links with covers and custom categories.",
   "scripts": {

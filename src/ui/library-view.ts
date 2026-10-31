@@ -46,6 +46,10 @@ export class VideoLibraryView extends ItemView {
   private draggingId: string | null = null;
   private dragPayload: { videos: string[]; folders: string[] } | null = null;
   private categoryDragId: string | null = null;
+  private homeCarouselTimer = 0;
+  private homeCarouselSeq = 0;
+  private homeCarouselIndex = 0;
+  private homeCarouselItems: VideoItem[] = [];
   private marqueeEl: HTMLElement | null = null;
   private marqueeStart: { x: number; y: number; mode: "toggle" | "add" | "subtract" } | null = null;
   private marqueeMoved = false;
@@ -78,6 +82,7 @@ export class VideoLibraryView extends ItemView {
 
   async onClose(): Promise<void> {
     window.clearTimeout(this.searchTimer);
+    window.clearTimeout(this.homeCarouselTimer);
     this.removeMarqueeListeners();
     this.marqueeEl?.remove();
     this.marqueeEl = null;
@@ -129,6 +134,7 @@ export class VideoLibraryView extends ItemView {
   }
 
   private render(): void {
+    window.clearTimeout(this.homeCarouselTimer);
     const body = this.bodyEl();
     body.empty();
     const root = body.createDiv({ cls: `vl-root is-size-${this.plugin.data.settings.cardSize}` });
@@ -237,6 +243,7 @@ export class VideoLibraryView extends ItemView {
   }
 
   private setFilter(filter: Filter): void {
+    const wasHome = this.filter === "home";
     this.filter = filter;
     if (filter !== "all" && filter !== "favorites" && filter !== UNCATEGORIZED_ID && filter !== "home") {
       if (!this.plugin.getCategory(filter)) this.filter = "all";
@@ -244,7 +251,7 @@ export class VideoLibraryView extends ItemView {
     this.currentFolderId = null;
     this.clearSelection();
     this.updateNavActive();
-    if (this.filter === "home") {
+    if (this.filter === "home" || wasHome) {
       this.render();
       return;
     }
@@ -483,8 +490,18 @@ export class VideoLibraryView extends ItemView {
       .sort((a, b) => (b.pinnedAt || b.createdAt) - (a.pinnedAt || a.createdAt));
     const favorites = allVideos.filter((video) => video.favorite);
     const recent = [...allVideos].sort((a, b) => b.createdAt - a.createdAt);
-    const featured = pinned[0] || favorites[0] || recent[0];
-    this.renderHero(main, featured);
+    const played = allVideos
+      .filter((video) => video.lastPlayedAt)
+      .sort((a, b) => (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0));
+    const pool: VideoItem[] = [];
+    const seen = new Set<string>();
+    for (const video of [...played, ...pinned, ...favorites, ...recent]) {
+      if (seen.has(video.id)) continue;
+      seen.add(video.id);
+      pool.push(video);
+    }
+    this.homeCarouselItems = pool.slice(0, 6);
+    this.renderHeroCarousel(main);
 
     if (pinned.length > 0) this.renderHomeRow(main, t("home.pinned"), pinned, "pin", "all");
     this.renderHomeRow(main, t("home.recent"), recent.slice(0, 16), "clock", "all");
@@ -500,37 +517,125 @@ export class VideoLibraryView extends ItemView {
     this.updateNavActive();
   }
 
-  private renderHero(parent: HTMLElement, video: VideoItem): void {
+  private renderHeroCarousel(parent: HTMLElement): void {
+    const videos = this.homeCarouselItems;
+    if (videos.length === 0) return;
     const hero = parent.createDiv({ cls: "vl-home-hero" });
     const background = hero.createDiv({ cls: "vl-home-hero-bg" });
     const image = background.createEl("img", { attr: { alt: "" } });
-    this.applyCover(image, video, () => hero.addClass("is-no-cover"));
     const content = hero.createDiv({ cls: "vl-home-hero-content" });
     const eyebrow = content.createDiv({ cls: "vl-home-hero-eyebrow" });
-    if (video.pinned) {
-      setIcon(eyebrow.createSpan(), "pin");
-      eyebrow.createSpan({ text: t("home.featuredPinned") });
-    } else if (video.favorite) {
-      setIcon(eyebrow.createSpan(), "star");
-      eyebrow.createSpan({ text: t("home.featuredFavorite") });
-    } else {
-      eyebrow.createSpan({ text: t("home.featuredRecent") });
-    }
-    content.createEl("h2", { text: video.title });
+    const title = content.createEl("h2");
     const meta = content.createDiv({ cls: "vl-home-hero-meta" });
-    meta.createSpan({ text: this.plugin.categoryName(video.categoryId) });
-    meta.createSpan({ text: providerName(video.provider) });
-    if (video.author) meta.createSpan({ text: video.author });
-    if (video.description) {
-      content.createDiv({ text: video.description, cls: "vl-home-hero-desc" });
-    }
+    const description = content.createDiv({ cls: "vl-home-hero-desc is-hidden" });
     const buttons = content.createDiv({ cls: "vl-home-hero-buttons" });
     const play = buttons.createEl("button", { cls: "vl-home-play mod-cta", attr: { type: "button" } });
     setIcon(play.createSpan({ cls: "vl-btn-icon" }), "play");
     play.createSpan({ text: t("action.play") });
-    play.addEventListener("click", () => this.openPlayer(video));
+    play.addEventListener("click", () => {
+      const video = this.homeCarouselItems[this.homeCarouselIndex];
+      if (video) this.openPlayer(video);
+    });
     const details = buttons.createEl("button", { text: t("action.edit"), attr: { type: "button" } });
-    details.addEventListener("click", () => this.openEdit(video));
+    details.addEventListener("click", () => {
+      const video = this.homeCarouselItems[this.homeCarouselIndex];
+      if (video) this.openEdit(video);
+    });
+
+    const dots = hero.createDiv({ cls: "vl-home-hero-dots" });
+    const arrows = hero.createDiv({ cls: "vl-home-hero-arrows" });
+    const previous = arrows.createEl("button", { attr: { type: "button", "aria-label": t("home.previous") } });
+    setIcon(previous, "chevron-left");
+    const next = arrows.createEl("button", { attr: { type: "button", "aria-label": t("home.next") } });
+    setIcon(next, "chevron-right");
+    if (videos.length < 2) {
+      dots.addClass("is-hidden");
+      arrows.addClass("is-hidden");
+    }
+
+    const show = (index: number): void => {
+      const length = this.homeCarouselItems.length;
+      if (length === 0) return;
+      this.homeCarouselIndex = (index + length) % length;
+      const video = this.homeCarouselItems[this.homeCarouselIndex];
+      const seq = ++this.homeCarouselSeq;
+      hero.removeClass("is-no-cover");
+      image.removeAttribute("src");
+      if (video.coverPath) {
+        void this.plugin.coverStore.getUrl(video.coverPath).then((url) => {
+          if (seq !== this.homeCarouselSeq) return;
+          if (url) image.src = url;
+          else hero.addClass("is-no-cover");
+        });
+      } else if (video.thumbnailUrl) {
+        image.src = video.thumbnailUrl;
+      } else {
+        hero.addClass("is-no-cover");
+      }
+
+      eyebrow.empty();
+      if (video.pinned) {
+        setIcon(eyebrow.createSpan(), "pin");
+        eyebrow.createSpan({ text: t("home.featuredPinned") });
+      } else if (video.favorite) {
+        setIcon(eyebrow.createSpan(), "star");
+        eyebrow.createSpan({ text: t("home.featuredFavorite") });
+      } else if (video.lastPlayedAt) {
+        setIcon(eyebrow.createSpan(), "history");
+        eyebrow.createSpan({ text: t("home.featuredPlayed") });
+      } else {
+        eyebrow.createSpan({ text: t("home.featuredRecent") });
+      }
+      title.setText(video.title);
+      meta.empty();
+      meta.createSpan({ text: this.plugin.categoryName(video.categoryId) });
+      meta.createSpan({ text: providerName(video.provider) });
+      if (video.author) meta.createSpan({ text: video.author });
+      if (video.description) {
+        description.setText(video.description);
+        description.removeClass("is-hidden");
+      } else {
+        description.addClass("is-hidden");
+      }
+
+      for (const dot of Array.from(dots.children) as HTMLElement[]) {
+        dot.toggleClass("is-active", Number(dot.dataset.index) === this.homeCarouselIndex);
+      }
+    };
+
+    videos.forEach((video, index) => {
+      const dot = dots.createEl("button", {
+        cls: "vl-home-hero-dot",
+        attr: { type: "button", "data-index": String(index), "aria-label": video.title }
+      });
+      dot.addEventListener("click", () => {
+        show(index);
+        schedule();
+      });
+    });
+    previous.addEventListener("click", () => {
+      show(this.homeCarouselIndex - 1);
+      schedule();
+    });
+    next.addEventListener("click", () => {
+      show(this.homeCarouselIndex + 1);
+      schedule();
+    });
+
+    const schedule = (): void => {
+      window.clearTimeout(this.homeCarouselTimer);
+      if (this.homeCarouselItems.length < 2) return;
+      this.homeCarouselTimer = window.setTimeout(() => {
+        show(this.homeCarouselIndex + 1);
+        schedule();
+      }, 6500);
+    };
+    hero.addEventListener("mouseenter", () => window.clearTimeout(this.homeCarouselTimer));
+    hero.addEventListener("mouseleave", schedule);
+    image.addEventListener("load", () => hero.removeClass("is-no-cover"));
+    image.addEventListener("error", () => hero.addClass("is-no-cover"));
+    show(0);
+    schedule();
   }
 
   private renderHomeRow(
@@ -1841,6 +1946,7 @@ export class VideoLibraryView extends ItemView {
 
   private openPlayer(video: VideoItem): void {
     HoverPreview.stopActive();
+    void this.plugin.markPlayed(video.id);
     new VideoPlayerModal(this.app, this.plugin, video).open();
   }
 

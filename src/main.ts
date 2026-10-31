@@ -201,6 +201,7 @@ export default class VideoLibraryPlugin extends Plugin {
               pinned: Boolean(video.pinned),
               pinnedAt: Number(video.pinnedAt) || undefined,
               sortOrder: Number.isFinite(Number(video.sortOrder)) ? Number(video.sortOrder) : undefined,
+              lastPlayedAt: Number(video.lastPlayedAt) || undefined,
               createdAt: Number(video.createdAt) || Date.now(),
               updatedAt: Number(video.updatedAt) || Number(video.createdAt) || Date.now()
             } as VideoItem;
@@ -559,6 +560,128 @@ export default class VideoLibraryPlugin extends Plugin {
     this.refreshViews();
   }
 
+  async importExternalFiles(
+    paths: string[],
+    folderId: string | null = null,
+    categoryId = UNCATEGORIZED_ID
+  ): Promise<{ imported: number; skipped: number }> {
+    const nodePath = nodeRequire("path");
+    let imported = 0;
+    let skipped = 0;
+    for (const filePath of paths) {
+      if (!nodePath?.basename || this.findDuplicate("", filePath)) {
+        skipped += 1;
+        continue;
+      }
+      const name = nodePath.basename(filePath) as string;
+      const title = name.replace(/\.[^.]+$/, "") || name;
+      const now = Date.now() - imported;
+      const video: VideoItem = {
+        id: uid("vid"),
+        url: "",
+        provider: "local",
+        title,
+        categoryId,
+        folderId: folderId || undefined,
+        tags: [],
+        localPath: filePath,
+        localExternal: true,
+        createdAt: now,
+        updatedAt: now
+      };
+      await this.ensureExternalLink(video);
+      this.data.videos.push(video);
+      imported += 1;
+    }
+    if (imported > 0) {
+      await this.persist();
+      this.refreshViews();
+    }
+    return { imported, skipped };
+  }
+
+  async importExternalFolder(
+    folderPath: string,
+    parentFolderId: string | null = null,
+    categoryId = UNCATEGORIZED_ID
+  ): Promise<{ imported: number; skipped: number; folders: number }> {
+    const fs = nodeRequire("fs");
+    const nodePath = nodeRequire("path");
+    if (!fs?.readdirSync || !nodePath?.basename) return { imported: 0, skipped: 0, folders: 0 };
+    const videoExtensions = new Set([
+      "mp4", "mkv", "webm", "mov", "avi", "wmv", "flv", "m4v", "ts", "mpg", "mpeg", "rmvb", "3gp"
+    ]);
+    let imported = 0;
+    let skipped = 0;
+    let folders = 0;
+
+    const ensureFolder = (parentId: string | null, name: string): string => {
+      const existing = this.data.folders.find(
+        (folder) =>
+          (folder.parentId || null) === parentId && folder.name.toLowerCase() === name.toLowerCase()
+      );
+      if (existing) return existing.id;
+      const folder: Folder = {
+        id: uid("folder"),
+        name,
+        parentId,
+        createdAt: Date.now()
+      };
+      this.data.folders.push(folder);
+      folders += 1;
+      return folder.id;
+    };
+
+    const walk = async (directory: string, parentId: string | null): Promise<void> => {
+      let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }> = [];
+      try {
+        entries = fs.readdirSync(directory, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      entries.sort((a, b) => a.name.localeCompare(b.name));
+      for (const entry of entries) {
+        const fullPath = nodePath.join(directory, entry.name);
+        if (entry.isDirectory()) {
+          const folderId = ensureFolder(parentId, entry.name);
+          await walk(fullPath, folderId);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        const extension = entry.name.split(".").pop()?.toLowerCase() || "";
+        if (!videoExtensions.has(extension)) continue;
+        if (this.findDuplicate("", fullPath)) {
+          skipped += 1;
+          continue;
+        }
+        const now = Date.now() - imported;
+        const video: VideoItem = {
+          id: uid("vid"),
+          url: "",
+          provider: "local",
+          title: entry.name.replace(/\.[^.]+$/, ""),
+          categoryId,
+          folderId: parentId || undefined,
+          tags: [],
+          localPath: fullPath,
+          localExternal: true,
+          createdAt: now,
+          updatedAt: now
+        };
+        await this.ensureExternalLink(video);
+        this.data.videos.push(video);
+        imported += 1;
+      }
+    };
+
+    const rootName = nodePath.basename(folderPath) || "Imported folder";
+    const rootFolderId = ensureFolder(parentFolderId, rootName);
+    await walk(folderPath, rootFolderId);
+    await this.persist();
+    this.refreshViews();
+    return { imported, skipped, folders };
+  }
+
   async updateVideo(video: VideoItem): Promise<void> {
     const index = this.data.videos.findIndex((candidate) => candidate.id === video.id);
     const previous = index >= 0 ? this.data.videos[index] : undefined;
@@ -624,6 +747,13 @@ export default class VideoLibraryPlugin extends Plugin {
     target.updatedAt = Date.now();
     await this.persist();
     this.refreshViews();
+  }
+
+  async markPlayed(videoId: string): Promise<void> {
+    const video = this.data.videos.find((candidate) => candidate.id === videoId);
+    if (!video) return;
+    video.lastPlayedAt = Date.now();
+    await this.persist();
   }
 
   async setPinned(ids: Set<string>, pinned: boolean): Promise<void> {

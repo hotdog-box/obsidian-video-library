@@ -113,6 +113,7 @@ export interface VideoItem {
   pinned?: boolean;
   pinnedAt?: number;
   sortOrder?: number;
+  lastPlayedAt?: number;
   createdAt: number;
   updatedAt: number;
 }

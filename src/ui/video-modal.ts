@@ -205,21 +205,110 @@ export class VideoEditModal extends Modal {
       attr: { type: "button" }
     });
     chooseExternal.addEventListener("click", () => this.chooseExternalVideo());
+    if (!this.item) {
+      const importFiles = localCard.createEl("button", {
+        text: t("form.importExternalFiles"),
+        attr: { type: "button" }
+      });
+      importFiles.addEventListener("click", () => this.chooseExternalFiles());
+      const importFolder = localCard.createEl("button", {
+        text: t("form.importExternalFolder"),
+        attr: { type: "button" }
+      });
+      importFolder.addEventListener("click", () => this.chooseExternalFolder());
+    }
   }
 
   private chooseExternalVideo(): void {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "video/*,.mkv,.avi,.mov,.wmv,.flv,.rmvb,.ts,.m4v,.mpg,.mpeg,.webm";
-    input.style.display = "none";
-    document.body.appendChild(input);
-    input.addEventListener("change", () => {
-      const file = input.files?.[0] as (File & { path?: string }) | undefined;
-      if (file?.path) this.selectExternalFile(file.path, file.name);
-      input.remove();
+    void this.pickExternalPaths("file").then((paths) => {
+      const path = paths[0];
+      if (path) this.selectExternalFile(path, path.split(/[\\/]/).pop() || path);
     });
-    input.addEventListener("cancel", () => input.remove());
-    input.click();
+  }
+
+  private chooseExternalFiles(): void {
+    void this.pickExternalPaths("files").then(async (paths) => {
+      if (paths.length === 0) return;
+      if (paths.length === 1) {
+        this.selectExternalFile(paths[0], paths[0].split(/[\\/]/).pop() || paths[0]);
+        return;
+      }
+      const result = await this.plugin.importExternalFiles(
+        paths,
+        this.folderId || null,
+        this.categorySelect.value || UNCATEGORIZED_ID
+      );
+      new Notice(
+        result.imported > 0 ? t("notice.importedVideos", { count: result.imported, skipped: result.skipped }) : t("notice.importEmpty")
+      );
+      if (result.imported > 0) this.close();
+    });
+  }
+
+  private chooseExternalFolder(): void {
+    void this.pickExternalPaths("folder").then(async (paths) => {
+      const folderPath = paths[0];
+      if (!folderPath) return;
+      const result = await this.plugin.importExternalFolder(
+        folderPath,
+        this.folderId || null,
+        this.categorySelect.value || UNCATEGORIZED_ID
+      );
+      new Notice(
+        result.imported > 0
+          ? t("notice.importedFolder", { count: result.imported, folders: result.folders, skipped: result.skipped })
+          : t("notice.importEmpty")
+      );
+      if (result.imported > 0) this.close();
+    });
+  }
+
+  private async pickExternalPaths(mode: "file" | "files" | "folder"): Promise<string[]> {
+    const loader = (window as unknown as { require?: (module: string) => any }).require;
+    const remote = loader?.("@electron/remote");
+    if (remote?.dialog?.showOpenDialog) {
+      const properties =
+        mode === "folder"
+          ? ["openDirectory"]
+          : mode === "files"
+            ? ["openFile", "multiSelections"]
+            : ["openFile"];
+      const result = await remote.dialog.showOpenDialog(remote.getCurrentWindow(), {
+        title: mode === "folder" ? t("form.chooseExternalFolder") : t("form.chooseExternalVideo"),
+        properties,
+        filters: [
+          {
+            name: "Videos",
+            extensions: ["mp4", "mkv", "webm", "mov", "avi", "wmv", "flv", "m4v", "ts", "mpg", "mpeg", "rmvb", "3gp"]
+          }
+        ]
+      });
+      return result.canceled ? [] : result.filePaths || [];
+    }
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.multiple = mode !== "file";
+      if (mode === "folder") input.setAttribute("webkitdirectory", "true");
+      input.accept = "video/*,.mkv,.avi,.mov,.wmv,.flv,.rmvb,.ts,.m4v,.mpg,.mpeg,.webm";
+      input.style.display = "none";
+      document.body.appendChild(input);
+      input.addEventListener("change", () => {
+        const paths = Array.from(input.files || [])
+          .map((file) => {
+            const webUtils = loader?.("electron")?.webUtils;
+            return webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path || "";
+          })
+          .filter(Boolean);
+        input.remove();
+        resolve(paths);
+      });
+      input.addEventListener("cancel", () => {
+        input.remove();
+        resolve([]);
+      });
+      input.click();
+    });
   }
 
   private selectExternalFile(path: string, name: string): void {
@@ -915,6 +1004,8 @@ export class VideoEditModal extends Modal {
         thumbnailUrl: this.metadata?.thumbnailUrl || this.item?.thumbnailUrl,
         localPath: isLocal ? this.localPath : undefined,
         localExternal: isLocal ? this.localExternal : undefined,
+        localLinkPath: isLocal && this.localExternal ? this.item?.localLinkPath : undefined,
+        lastPlayedAt: this.item?.lastPlayedAt,
         duration: this.metadata?.duration || this.item?.duration,
         epId: this.metadata?.epId || parsed?.epId || this.item?.epId,
         preview: this.previewConfig,

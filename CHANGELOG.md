@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 — 2026-10-31
+
+- Fix external file selection: use the native Electron file dialog and read paths with `webUtils.getPathForFile`.
+- Add multi-file external import and whole-folder import, preserving the folder tree and skipping duplicates.
+- Add a six-video Home hero carousel with auto-rotation, dots and previous/next buttons.
+- Track `lastPlayedAt` and prioritize recently played videos in the Home carousel.
+- Fix switching from Home back to All videos, Favorites, Uncategorized and categories.
+- Fix “View all” links on Home so they actually open the corresponding library view.
+- External imports show a summary notice and close the add dialog after importing.
+
 ## 0.4.0 — 2026-10-31
 
 - Add external local video support: pick any video file on the computer without copying it into the vault.

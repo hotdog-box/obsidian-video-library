@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-10-31
+
+- Global tag library shared by all videos, with migration from existing free-text tags.
+- Tag picker while adding/editing: choose existing tags, create new ones, and assign multiple tags per video.
+- Tag manager for creating, renaming, deleting and reviewing usage counts.
+- Tag filter bar with one or more selected tags and an Any/All match-strength switch.
+- Tag filtering combines with the current category and search query.
+- Tag match mode is remembered across sessions.
+
 ## 0.1.9 — 2026-10-31
 
 - The toolbar and batch-action bar are now sticky and stay visible while scrolling.

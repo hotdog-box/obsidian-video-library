@@ -29,7 +29,10 @@ export class VideoEditModal extends Modal {
   private localPath?: string;
   private titleInput!: HTMLInputElement;
   private categorySelect!: HTMLSelectElement;
-  private tagsInput!: HTMLInputElement;
+  private tagChipsEl!: HTMLElement;
+  private tagSelect!: HTMLSelectElement;
+  private tagNewInput!: HTMLInputElement;
+  private selectedTags: string[] = [];
   private notesInput!: HTMLTextAreaElement;
   private urlPane!: HTMLElement;
   private localPane!: HTMLElement;
@@ -73,6 +76,7 @@ export class VideoEditModal extends Modal {
     this.parsed = video?.url ? parseVideoUrl(video.url) : null;
     this.titleTouched = Boolean(video);
     this.author = video?.author;
+    this.selectedTags = video ? [...video.tags] : [];
     this.previewConfig = clonePreviewConfig(video?.preview);
     this.coverPath = video?.coverPath;
     this.modalEl.addClass("vl-video-modal");
@@ -228,13 +232,9 @@ export class VideoEditModal extends Modal {
       }).open();
     });
 
-    const tagsField = grid.createDiv({ cls: "vl-field" });
+    const tagsField = grid.createDiv({ cls: "vl-field vl-field-wide" });
     tagsField.createEl("label", { text: t("form.tags"), cls: "vl-field-label" });
-    this.tagsInput = tagsField.createEl("input", {
-      type: "text",
-      cls: "vl-text-input",
-      attr: { placeholder: t("form.tagsPlaceholder"), "data-vl-field": "tags" }
-    });
+    this.buildTagPicker(tagsField);
 
     const notesField = grid.createDiv({ cls: "vl-field vl-field-wide" });
     notesField.createEl("label", { text: t("form.notes"), cls: "vl-field-label" });
@@ -242,6 +242,91 @@ export class VideoEditModal extends Modal {
       cls: "vl-text-area",
       attr: { placeholder: t("form.notesPlaceholder"), rows: "3", "data-vl-field": "notes" }
     });
+  }
+
+  private buildTagPicker(parent: HTMLElement): void {
+    const picker = parent.createDiv({ cls: "vl-tag-picker" });
+    this.tagChipsEl = picker.createDiv({ cls: "vl-tag-picker-chips" });
+
+    const controls = picker.createDiv({ cls: "vl-tag-picker-controls" });
+    this.tagSelect = controls.createEl("select", {
+      cls: "dropdown vl-tag-select",
+      attr: { "aria-label": t("tag.selectedExisting"), "data-vl-field": "tags-existing" }
+    });
+    this.tagSelect.addEventListener("change", () => {
+      const value = this.tagSelect.value;
+      this.tagSelect.value = "";
+      if (value) this.addTag(value);
+    });
+
+    this.tagNewInput = controls.createEl("input", {
+      type: "text",
+      cls: "vl-text-input vl-tag-new",
+      attr: { placeholder: t("tag.newPlaceholder"), "data-vl-field": "tags-new" }
+    });
+    const add = controls.createEl("button", {
+      cls: "vl-small-button",
+      attr: { type: "button", "data-vl-action": "add-tag" }
+    });
+    setIcon(add.createSpan(), "plus");
+    add.createSpan({ text: t("tag.add") });
+    add.addEventListener("click", () => this.addTag(this.tagNewInput.value));
+    this.tagNewInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      this.addTag(this.tagNewInput.value);
+    });
+  }
+
+  private addTag(raw: string): void {
+    const name = raw.trim();
+    if (!name) return;
+    const existing = this.plugin.getTagByName(name);
+    const canonical = existing?.name || name;
+    if (!this.selectedTags.some((tag) => tag.toLowerCase() === canonical.toLowerCase())) {
+      this.selectedTags.push(canonical);
+      if (this.tagNewInput) this.tagNewInput.value = "";
+      this.renderTagChips();
+    }
+  }
+
+  private removeTag(name: string): void {
+    this.selectedTags = this.selectedTags.filter((tag) => tag !== name);
+    this.renderTagChips();
+  }
+
+  private renderTagChips(): void {
+    if (!this.tagChipsEl) return;
+    this.tagChipsEl.empty();
+    if (this.selectedTags.length === 0) {
+      this.tagChipsEl.createSpan({ text: t("tag.noTags"), cls: "vl-tag-picker-empty" });
+    }
+    for (const name of this.selectedTags) {
+      const tag = this.plugin.getTagByName(name);
+      const chip = this.tagChipsEl.createSpan({ cls: "vl-selected-tag" });
+      const dot = chip.createSpan({ cls: "vl-tag-dot" });
+      dot.style.backgroundColor = tag?.color || "var(--interactive-accent)";
+      chip.createSpan({ text: name });
+      const remove = chip.createEl("button", {
+        cls: "vl-selected-tag-remove",
+        attr: { type: "button", title: t("tag.remove"), "aria-label": t("tag.remove") }
+      });
+      setIcon(remove, "x");
+      remove.addEventListener("click", () => this.removeTag(name));
+    }
+
+    if (this.tagSelect) {
+      this.tagSelect.empty();
+      this.tagSelect.createEl("option", {
+        text: t("tag.selectedExisting"),
+        value: "",
+        attr: { selected: "true" }
+      });
+      for (const tag of this.plugin.data.tags) {
+        if (this.selectedTags.some((name) => name.toLowerCase() === tag.name.toLowerCase())) continue;
+        this.tagSelect.createEl("option", { text: tag.name, value: tag.name });
+      }
+    }
   }
 
   private buildCoverSection(): void {
@@ -363,9 +448,9 @@ export class VideoEditModal extends Modal {
   private populateFields(): void {
     this.urlInput.value = this.item?.url || "";
     this.titleInput.value = this.item?.title || "";
-    this.tagsInput.value = this.item?.tags?.join(", ") || "";
     this.notesInput.value = this.item?.notes || "";
     this.fillCategories(this.item?.categoryId || UNCATEGORIZED_ID);
+    this.renderTagChips();
     this.updateLocalLabel();
   }
 
@@ -765,6 +850,7 @@ export class VideoEditModal extends Modal {
         await this.plugin.coverStore.delete(this.coverPath);
       }
 
+      const tags = await this.plugin.ensureTags(this.selectedTags);
       const now = Date.now();
       const title =
         this.titleInput.value.trim() ||
@@ -780,7 +866,7 @@ export class VideoEditModal extends Modal {
         author: this.author,
         description: this.item?.description,
         categoryId: this.categorySelect.value || UNCATEGORIZED_ID,
-        tags: this.parseTags(this.tagsInput.value),
+        tags,
         notes: this.notesInput.value.trim() || undefined,
         coverPath,
         thumbnailUrl: this.metadata?.thumbnailUrl || this.item?.thumbnailUrl,
@@ -811,21 +897,6 @@ export class VideoEditModal extends Modal {
       this.saveButton.disabled = false;
       this.saveButton.setText(t("action.save"));
     }
-  }
-
-  private parseTags(value: string): string[] {
-    const seen = new Set<string>();
-    const tags: string[] = [];
-    for (const part of value.split(/[,，;；]/)) {
-      const tag = part.trim().replace(/^#/, "");
-      const key = tag.toLowerCase();
-      if (tag && !seen.has(key)) {
-        seen.add(key);
-        tags.push(tag);
-      }
-      if (tags.length >= 20) break;
-    }
-    return tags;
   }
 
   onClose(): void {

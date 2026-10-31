@@ -11,6 +11,9 @@ import {
   PluginData,
   sanitizePreviewConfig,
   SortMode,
+  Tag,
+  TAG_COLORS,
+  TagMatchMode,
   uid,
   UNCATEGORIZED_ID,
   VideoItem
@@ -21,6 +24,10 @@ import { VideoLibrarySettingTab } from "./ui/settings-tab";
 
 export type CategoryMutationResult =
   | { ok: true; category: Category }
+  | { ok: false; reason: "empty" | "duplicate" };
+
+export type TagMutationResult =
+  | { ok: true; tag: Tag }
   | { ok: false; reason: "empty" | "duplicate" };
 
 export default class VideoLibraryPlugin extends Plugin {
@@ -94,12 +101,50 @@ export default class VideoLibraryPlugin extends Plugin {
       : [];
 
     const categoryIds = new Set(categories.map((category) => category.id));
+    let tagsMigrated = !Array.isArray(loaded.tags);
+    const tags: Tag[] = Array.isArray(loaded.tags)
+      ? loaded.tags
+          .filter((tag): tag is Tag => Boolean(tag && tag.id && tag.name))
+          .map((tag) => ({
+            id: String(tag.id),
+            name: String(tag.name).trim(),
+            color: String(tag.color || TAG_COLORS[0]),
+            createdAt: Number(tag.createdAt) || Date.now()
+          }))
+          .filter((tag) => Boolean(tag.name))
+      : [];
+
+    const ensureTag = (rawName: string): Tag | undefined => {
+      const name = rawName.trim();
+      if (!name) return undefined;
+      const existing = tags.find((tag) => tag.name.toLowerCase() === name.toLowerCase());
+      if (existing) return existing;
+      const tag: Tag = {
+        id: uid("tag"),
+        name,
+        color: TAG_COLORS[tags.length % TAG_COLORS.length],
+        createdAt: Date.now()
+      };
+      tags.push(tag);
+      tagsMigrated = true;
+      return tag;
+    };
+
     const videos = Array.isArray(loaded.videos)
       ? loaded.videos
           .filter((video): video is VideoItem => Boolean(video && (video.url || video.localPath)))
           .map((video) => {
             const parsed = video.url ? parseVideoUrl(video.url) : null;
             const provider = video.provider || parsed?.provider || (video.localPath ? "local" : "web");
+            const normalizedTags: string[] = [];
+            if (Array.isArray(video.tags)) {
+              for (const rawTag of video.tags) {
+                const tag = ensureTag(String(rawTag));
+                if (tag && !normalizedTags.some((name) => name.toLowerCase() === tag.name.toLowerCase())) {
+                  normalizedTags.push(tag.name);
+                }
+              }
+            }
             return {
               ...video,
               id: video.id || uid("vid"),
@@ -107,7 +152,7 @@ export default class VideoLibraryPlugin extends Plugin {
               title: video.title || (video.url ? fallbackTitleFromUrl(video.url) : t("form.untitled")),
               categoryId:
                 video.categoryId && categoryIds.has(video.categoryId) ? video.categoryId : UNCATEGORIZED_ID,
-              tags: Array.isArray(video.tags) ? video.tags.filter(Boolean).map(String) : [],
+              tags: normalizedTags,
               preview: sanitizePreviewConfig(video.preview),
               createdAt: Number(video.createdAt) || Date.now(),
               updatedAt: Number(video.updatedAt) || Number(video.createdAt) || Date.now()
@@ -123,13 +168,17 @@ export default class VideoLibraryPlugin extends Plugin {
     settings.previewVolume = Number.isFinite(Number(settings.previewVolume))
       ? Math.min(1, Math.max(0, Number(settings.previewVolume)))
       : 0.8;
+    settings.tagMatchMode = settings.tagMatchMode === "all" ? "all" : "any";
 
     this.data = {
       version: DATA_VERSION,
       categories,
       videos,
+      tags,
       settings
     };
+
+    if (tagsMigrated) await this.persist();
   }
 
   async persist(): Promise<void> {
@@ -227,6 +276,100 @@ export default class VideoLibraryPlugin extends Plugin {
     await this.persist();
     this.refreshViews();
     return moved;
+  }
+
+  getTagByName(name: string): Tag | undefined {
+    const lower = name.trim().toLowerCase();
+    return this.data.tags.find((tag) => tag.name.toLowerCase() === lower);
+  }
+
+  tagCount(name: string): number {
+    const lower = name.toLowerCase();
+    return this.data.videos.filter((video) =>
+      video.tags.some((tag) => tag.toLowerCase() === lower)
+    ).length;
+  }
+
+  async createTag(name: string): Promise<TagMutationResult> {
+    const clean = name.trim();
+    if (!clean) return { ok: false, reason: "empty" };
+    if (this.getTagByName(clean)) return { ok: false, reason: "duplicate" };
+    const tag: Tag = {
+      id: uid("tag"),
+      name: clean,
+      color: TAG_COLORS[this.data.tags.length % TAG_COLORS.length],
+      createdAt: Date.now()
+    };
+    this.data.tags.push(tag);
+    await this.persist();
+    return { ok: true, tag };
+  }
+
+  async ensureTags(names: string[]): Promise<string[]> {
+    const canonical: string[] = [];
+    for (const raw of names) {
+      const clean = raw.trim();
+      if (!clean) continue;
+      let tag = this.getTagByName(clean);
+      if (!tag) {
+        tag = {
+          id: uid("tag"),
+          name: clean,
+          color: TAG_COLORS[this.data.tags.length % TAG_COLORS.length],
+          createdAt: Date.now()
+        };
+        this.data.tags.push(tag);
+      }
+      if (!canonical.some((name) => name.toLowerCase() === tag!.name.toLowerCase())) {
+        canonical.push(tag.name);
+      }
+    }
+    return canonical;
+  }
+
+  async renameTag(id: string, name: string): Promise<TagMutationResult> {
+    const tag = this.data.tags.find((candidate) => candidate.id === id);
+    if (!tag) return { ok: false, reason: "empty" };
+    const clean = name.trim();
+    if (!clean) return { ok: false, reason: "empty" };
+    if (
+      this.data.tags.some(
+        (candidate) => candidate.id !== id && candidate.name.toLowerCase() === clean.toLowerCase()
+      )
+    ) {
+      return { ok: false, reason: "duplicate" };
+    }
+    const oldName = tag.name;
+    tag.name = clean;
+    for (const video of this.data.videos) {
+      if (!video.tags.includes(oldName)) continue;
+      video.tags = video.tags.map((value) => (value === oldName ? clean : value));
+      video.updatedAt = Date.now();
+    }
+    await this.persist();
+    this.refreshViews();
+    return { ok: true, tag };
+  }
+
+  async deleteTag(id: string): Promise<number> {
+    const tag = this.data.tags.find((candidate) => candidate.id === id);
+    if (!tag) return 0;
+    let changed = 0;
+    for (const video of this.data.videos) {
+      if (!video.tags.includes(tag.name)) continue;
+      video.tags = video.tags.filter((name) => name !== tag.name);
+      video.updatedAt = Date.now();
+      changed += 1;
+    }
+    this.data.tags = this.data.tags.filter((candidate) => candidate.id !== id);
+    await this.persist();
+    this.refreshViews();
+    return changed;
+  }
+
+  async setTagMatchMode(mode: TagMatchMode): Promise<void> {
+    this.data.settings.tagMatchMode = mode;
+    await this.persist();
   }
 
   async addVideo(video: VideoItem): Promise<void> {

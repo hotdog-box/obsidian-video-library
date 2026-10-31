@@ -6,7 +6,9 @@ export type SortMode = "newest" | "oldest" | "title-asc" | "title-desc";
 
 export type CardSize = "small" | "medium" | "large";
 
-export const DATA_VERSION = 1;
+export type TagMatchMode = "any" | "all";
+
+export const DATA_VERSION = 2;
 
 export const UNCATEGORIZED_ID = "uncategorized";
 
@@ -16,6 +18,24 @@ export interface Category {
   color: string;
   createdAt: number;
 }
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: number;
+}
+
+export const TAG_COLORS = [
+  "#e46b6b",
+  "#e8a33d",
+  "#d6c04a",
+  "#5bb98c",
+  "#4f9dd9",
+  "#8b7fe8",
+  "#d36bb3",
+  "#7a8a99"
+];
 
 export interface PreviewClip {
   start: number;
@@ -89,12 +109,14 @@ export interface PluginSettings {
   cardSize: CardSize;
   previewMuted: boolean;
   previewVolume: number;
+  tagMatchMode: TagMatchMode;
 }
 
 export interface PluginData {
   version: number;
   videos: VideoItem[];
   categories: Category[];
+  tags: Tag[];
   settings: PluginSettings;
 }
 
@@ -126,7 +148,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   sort: "newest",
   cardSize: "medium",
   previewMuted: true,
-  previewVolume: 0.8
+  previewVolume: 0.8,
+  tagMatchMode: "any"
 };
 
 export function createDefaultData(): PluginData {
@@ -134,6 +157,7 @@ export function createDefaultData(): PluginData {
     version: DATA_VERSION,
     videos: [],
     categories: [],
+    tags: [],
     settings: { ...DEFAULT_SETTINGS }
   };
 }

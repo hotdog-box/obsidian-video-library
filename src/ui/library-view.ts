@@ -2,6 +2,7 @@ import { ItemView, Menu, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import { ConfirmModal, formatDate, iconButton, openExternal } from "./common";
 import { HoverPreview } from "./hover-preview";
 import { BatchRenameModal } from "./batch-rename-modal";
+import { TagManagerModal } from "./tag-manager-modal";
 import { formatDuration, providerName, t, type MessageKey } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { SortMode, VideoItem } from "../types";
@@ -33,6 +34,11 @@ export class VideoLibraryView extends ItemView {
   private selectionBar!: HTMLElement;
   private selectionCountEl!: HTMLElement;
   private batchCategorySelect!: HTMLSelectElement;
+  private selectedTags = new Set<string>();
+  private tagFilterBar!: HTMLElement;
+  private tagFilterChips!: HTMLElement;
+  private tagModeButtons = new Map<"any" | "all", HTMLButtonElement>();
+  private tagClearButton!: HTMLButtonElement;
   private marqueeEl: HTMLElement | null = null;
   private marqueeStart: { x: number; y: number; mode: "toggle" | "add" | "subtract" } | null = null;
   private marqueeMoved = false;
@@ -88,6 +94,10 @@ export class VideoLibraryView extends ItemView {
     const existingIds = new Set(this.plugin.data.videos.map((video) => video.id));
     for (const id of [...this.selectedIds]) {
       if (!existingIds.has(id)) this.selectedIds.delete(id);
+    }
+    const existingTags = new Set(this.plugin.data.tags.map((tag) => tag.name));
+    for (const name of [...this.selectedTags]) {
+      if (!existingTags.has(name)) this.selectedTags.delete(name);
     }
     if (
       this.filter !== "all" &&
@@ -279,6 +289,7 @@ export class VideoLibraryView extends ItemView {
     add.addEventListener("click", () => this.openAdd());
 
     this.buildSelectionBar(header);
+    this.buildTagFilter(header);
     this.gridWrap = main.createDiv({ cls: "vl-grid-wrap" });
     this.gridWrap.addEventListener("pointerdown", (event) => this.onGridPointerDown(event));
     this.gridWrap.addEventListener(
@@ -352,6 +363,105 @@ export class VideoLibraryView extends ItemView {
     setIcon(button.createSpan({ cls: "vl-btn-icon" }), icon);
     button.createSpan({ text: label });
     button.addEventListener("click", onClick);
+  }
+
+  private buildTagFilter(parent: HTMLElement): void {
+    this.tagFilterBar = parent.createDiv({ cls: "vl-tag-filter" });
+    this.tagFilterBar.createSpan({ text: t("tag.filter"), cls: "vl-tag-filter-label" });
+    this.tagFilterChips = this.tagFilterBar.createDiv({ cls: "vl-tag-filter-chips" });
+
+    if (this.plugin.data.tags.length === 0) {
+      this.tagFilterChips.createSpan({ text: t("tag.noTags"), cls: "vl-tag-filter-empty" });
+    }
+
+    for (const tag of this.plugin.data.tags) {
+      const chip = this.tagFilterChips.createEl("button", {
+        cls: "vl-tag-chip",
+        attr: {
+          type: "button",
+          "data-tag-name": tag.name,
+          "aria-pressed": "false"
+        }
+      });
+      const dot = chip.createSpan({ cls: "vl-tag-dot" });
+      dot.style.backgroundColor = tag.color;
+      chip.createSpan({ text: tag.name });
+      chip.addEventListener("click", () => this.toggleTagFilter(tag.name));
+    }
+
+    const controls = this.tagFilterBar.createDiv({ cls: "vl-tag-filter-controls" });
+    const mode = controls.createDiv({ cls: "vl-tag-mode" });
+    mode.createSpan({ text: t("tag.matchStrength"), cls: "vl-tag-mode-label" });
+    for (const value of ["any", "all"] as const) {
+      const button = mode.createEl("button", {
+        text: value === "any" ? t("tag.filterAny") : t("tag.filterAll"),
+        attr: {
+          type: "button",
+          "data-tag-mode": value,
+          title: value === "any" ? t("tag.matchAnyHint") : t("tag.matchAllHint")
+        }
+      });
+      button.addEventListener("click", () => void this.setTagMatchMode(value));
+      this.tagModeButtons.set(value, button);
+    }
+
+    this.tagClearButton = controls.createEl("button", {
+      cls: "vl-tag-filter-button",
+      text: t("tag.filterClear"),
+      attr: { type: "button" }
+    });
+    this.tagClearButton.addEventListener("click", () => this.clearTagFilter());
+
+    const manage = controls.createEl("button", {
+      cls: "vl-tag-filter-button",
+      attr: { type: "button", title: t("tag.manage"), "aria-label": t("tag.manage") }
+    });
+    setIcon(manage, "settings-2");
+    manage.addEventListener("click", () => this.openTagManager());
+
+    this.updateTagFilterUi();
+  }
+
+  private updateTagFilterUi(): void {
+    if (!this.tagFilterBar) return;
+    for (const chip of Array.from(this.tagFilterChips.querySelectorAll(".vl-tag-chip")) as HTMLElement[]) {
+      const active = this.selectedTags.has(chip.dataset.tagName || "");
+      chip.toggleClass("is-active", active);
+      chip.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+    const mode = this.plugin.data.settings.tagMatchMode;
+    for (const [value, button] of this.tagModeButtons) {
+      button.toggleClass("is-active", value === mode);
+    }
+    this.tagClearButton.toggleClass("is-hidden", this.selectedTags.size === 0);
+  }
+
+  private toggleTagFilter(name: string): void {
+    if (this.selectedTags.has(name)) {
+      this.selectedTags.delete(name);
+    } else {
+      this.selectedTags.add(name);
+    }
+    this.updateTagFilterUi();
+    this.renderGrid();
+  }
+
+  private clearTagFilter(): void {
+    this.selectedTags.clear();
+    this.updateTagFilterUi();
+    this.renderGrid();
+  }
+
+  private async setTagMatchMode(mode: "any" | "all"): Promise<void> {
+    await this.plugin.setTagMatchMode(mode);
+    this.updateTagFilterUi();
+    this.renderGrid();
+  }
+
+  private openTagManager(): void {
+    new TagManagerModal(this.app, this.plugin, () => {
+      this.refresh();
+    }).open();
   }
 
   private updateSelectionUi(): void {
@@ -614,6 +724,15 @@ export class VideoLibraryView extends ItemView {
         (video.categoryId || UNCATEGORIZED_ID) !== this.filter
       ) {
         return false;
+      }
+      if (this.selectedTags.size > 0) {
+        const videoTags = new Set(video.tags.map((tag) => tag.toLowerCase()));
+        const selected = [...this.selectedTags].map((tag) => tag.toLowerCase());
+        const matches =
+          this.plugin.data.settings.tagMatchMode === "all"
+            ? selected.every((tag) => videoTags.has(tag))
+            : selected.some((tag) => videoTags.has(tag));
+        if (!matches) return false;
       }
       if (!query) return true;
       const haystack = [

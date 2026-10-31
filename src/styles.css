@@ -803,6 +803,89 @@
   border-radius: 20px;
 }
 
+.vl-tag-dot {
+  display: inline-block;
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  background: var(--interactive-accent);
+  border-radius: 50%;
+}
+
+.vl-tag-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vl-tag-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 24px;
+  padding: 3px 5px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+}
+
+.vl-tag-picker-empty {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.vl-selected-tag {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 3px 2px 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 20px;
+}
+
+.vl-selected-tag-remove {
+  display: flex;
+  padding: 1px;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: transparent !important;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+}
+
+.vl-selected-tag-remove:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover) !important;
+}
+
+.vl-selected-tag-remove svg {
+  width: 10px;
+  height: 10px;
+}
+
+.vl-tag-picker-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.vl-tag-select {
+  flex: 0 0 150px;
+  height: 30px;
+  font-size: 10px;
+}
+
+.vl-tag-new {
+  flex: 1;
+  min-width: 100px;
+  height: 30px;
+  padding: 4px 7px;
+}
+
 .vl-tag-more {
   color: var(--text-faint);
 }
@@ -932,6 +1015,142 @@
   color: var(--text-faint);
 }
 
+.vl-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  align-items: center;
+  padding-top: 6px;
+  margin-top: 6px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.vl-tag-filter-label {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.vl-tag-filter-chips {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  align-items: center;
+  min-width: 120px;
+  height: 36px;
+  padding: 3px 0 7px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.vl-tag-filter-empty {
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+.vl-tag-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+  height: 23px;
+  padding: 0 7px;
+  font-size: 9px;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: var(--background-secondary) !important;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+.vl-tag-chip:hover {
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
+.vl-tag-chip.is-active {
+  color: var(--text-normal);
+  background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-secondary)) !important;
+  border-color: var(--interactive-accent);
+}
+
+.vl-tag-filter-controls {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.vl-tag-mode {
+  display: flex;
+  gap: 1px;
+  align-items: center;
+  padding: 2px;
+  background: var(--background-secondary);
+  border-radius: 5px;
+}
+
+.vl-tag-mode-label {
+  padding: 0 4px;
+  font-size: 8px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vl-tag-mode button {
+  height: 21px;
+  padding: 0 6px;
+  font-size: 9px;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: transparent !important;
+  border: 0;
+  border-radius: 3px;
+  box-shadow: none;
+}
+
+.vl-tag-mode button:hover {
+  color: var(--text-normal);
+}
+
+.vl-tag-mode button.is-active {
+  font-weight: 700;
+  color: var(--interactive-accent) !important;
+  background: var(--background-primary) !important;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.vl-tag-filter-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 23px;
+  padding: 0 6px;
+  font-size: 9px;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: transparent !important;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.vl-tag-filter-button:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover) !important;
+}
+
+.vl-tag-filter-button svg {
+  width: 12px;
+  height: 12px;
+}
+
 .vl-card-check {
   position: absolute;
   top: 7px;
@@ -1055,6 +1274,66 @@
 
 .modal.vl-rename-modal {
   width: min(480px, 92vw);
+}
+
+.modal.vl-tag-modal {
+  width: min(540px, 92vw);
+}
+
+.vl-tag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.vl-tag-row {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 7px 9px;
+  background: var(--background-secondary);
+  border: 1px solid transparent;
+  border-radius: 7px;
+}
+
+.vl-tag-row:hover {
+  border-color: var(--background-modifier-border);
+}
+
+.vl-tag-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vl-tag-count {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.vl-tag-actions {
+  display: flex;
+  gap: 1px;
+}
+
+.vl-tag-add-row {
+  display: flex;
+  gap: 7px;
+  padding-top: 11px;
+  margin-top: 11px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.vl-tag-add-row .vl-text-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .modal.vl-prompt-modal,

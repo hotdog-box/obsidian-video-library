@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2 — 2026-10-31
+
+- Adopt Obsidian's declarative settings API with `getSettingDefinitions()`.
+- Remove the deprecated imperative `display()` settings implementation.
+- Settings now appear in Obsidian's settings search.
+- Raise the minimum Obsidian version to 1.13.0 for the declarative settings API.
+
 ## 0.5.1 — 2026-10-31
 
 - Address Obsidian community review findings.

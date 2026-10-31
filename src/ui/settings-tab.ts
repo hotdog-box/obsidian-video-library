@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, Setting, type SettingDefinitionItem } from "obsidian";
 import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { CardSize, LanguageSetting } from "../types";
@@ -8,72 +8,82 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     super(app, plugin);
   }
 
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.addClass("vl-settings");
-
-    new Setting(containerEl).setName(t("settings.title")).setHeading();
-    containerEl.createEl("p", { text: t("app.tagline"), cls: "vl-settings-tagline" });
-
-    new Setting(containerEl)
-      .setName(t("settings.language"))
-      .setDesc(t("settings.languageDesc"))
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("auto", t("settings.auto"))
-          .addOption("zh", t("settings.zh"))
-          .addOption("en", t("settings.en"))
-          .setValue(this.plugin.data.settings.language)
-          .onChange(async (value) => {
-            await this.plugin.setLanguageSetting(value as LanguageSetting);
-            this.display();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName(t("settings.cardSize"))
-      .setDesc(t("settings.cardSizeDesc"))
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOption("small", t("settings.small"))
-          .addOption("medium", t("settings.medium"))
-          .addOption("large", t("settings.large"))
-          .setValue(this.plugin.data.settings.cardSize)
-          .onChange(async (value) => {
-            await this.plugin.setCardSize(value as CardSize);
-          });
-      });
-
-    new Setting(containerEl)
-      .setName(t("settings.open"))
-      .setDesc(t("settings.openDesc"))
-      .addButton((button) => {
-        button.setButtonText(t("action.openLibrary")).setCta().onClick(() => {
-          void this.plugin.openView();
-        });
-      });
-
+  getSettingDefinitions(): SettingDefinitionItem[] {
     const dataPath = `${this.plugin.manifest.dir || `${this.app.vault.configDir}/plugins/video-library`}/data.json`;
-    const dataSetting = new Setting(containerEl)
-      .setName(t("settings.data"))
-      .setDesc(t("settings.dataDesc", { path: dataPath }));
+    return [
+      {
+        type: "group",
+        heading: t("settings.title"),
+        items: [
+          {
+            name: t("settings.language"),
+            desc: t("settings.languageDesc"),
+            control: {
+              type: "dropdown",
+              key: "language",
+              defaultValue: "auto",
+              options: {
+                auto: t("settings.auto"),
+                zh: t("settings.zh"),
+                en: t("settings.en")
+              }
+            }
+          },
+          {
+            name: t("settings.cardSize"),
+            desc: t("settings.cardSizeDesc"),
+            control: {
+              type: "dropdown",
+              key: "cardSize",
+              defaultValue: "medium",
+              options: {
+                small: t("settings.small"),
+                medium: t("settings.medium"),
+                large: t("settings.large")
+              }
+            }
+          },
+          {
+            name: t("settings.open"),
+            desc: t("settings.openDesc"),
+            action: () => {
+              void this.plugin.openView();
+            }
+          },
+          {
+            name: t("settings.data"),
+            desc: t("settings.dataDesc", { path: dataPath })
+          },
+          {
+            name: t("settings.covers"),
+            desc: t("settings.coversDesc", { count: "…" }),
+            render: (setting: Setting) => {
+              void this.plugin.coverStore.count().then((count) => {
+                setting.setDesc(t("settings.coversDesc", { count }));
+              });
+            }
+          },
+          {
+            name: t("settings.about"),
+            desc: t("settings.aboutDesc", { version: this.plugin.manifest.version })
+          }
+        ]
+      }
+    ];
+  }
 
-    const coversSetting = new Setting(containerEl)
-      .setName(t("settings.covers"))
-      .setDesc(t("settings.coversDesc", { count: "…" }));
-    void this.plugin.coverStore.count().then((count) => {
-      coversSetting.setDesc(t("settings.coversDesc", { count }));
-    });
+  getControlValue(key: string): unknown {
+    if (key === "language") return this.plugin.data.settings.language;
+    if (key === "cardSize") return this.plugin.data.settings.cardSize;
+    return undefined;
+  }
 
-    dataSetting.addButton((button) => {
-      button.setButtonText(t("action.refresh")).onClick(() => {
-        this.display();
-      });
-    });
-
-    new Setting(containerEl)
-      .setName(t("settings.about"))
-      .setDesc(t("settings.aboutDesc", { version: this.plugin.manifest.version }));
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    if (key === "language") {
+      await this.plugin.setLanguageSetting(value as LanguageSetting);
+      this.update();
+    } else if (key === "cardSize") {
+      await this.plugin.setCardSize(value as CardSize);
+    }
   }
 }

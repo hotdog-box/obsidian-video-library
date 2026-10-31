@@ -21,7 +21,7 @@ See the Chinese sections below for the complete feature list and usage notes.
 
 ---
 
-> 当前版本：`0.5.1`  
+> 当前版本：`0.5.2`  
 > 已在 Obsidian `1.14.5`（Windows 桌面版）实际测试通过。  
 > 插件类型：仅桌面端。
 

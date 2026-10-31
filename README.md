@@ -4,7 +4,24 @@
 
 ![视频库界面](docs/demo-grid.png)
 
-> 当前版本：`0.5.0`  
+## English overview
+
+Video Library is a desktop-only Obsidian plugin for collecting, organizing and watching video links and local video files in one cover grid.
+
+- Import Bilibili, YouTube, Vimeo, direct video URLs and generic web pages, with automatic title, author, duration and cover detection.
+- Add videos from inside the vault or from any folder on the computer; multi-file import and whole-folder import preserve subfolders.
+- Organize with nested folders, breadcrumbs, tags with Any/All filtering, favorites, pinned videos, manual drag ordering and custom categories.
+- Windows Explorer-style selection: single-click selects, double-click opens, Ctrl/Cmd toggles, Shift extends, and dragging selected items moves them.
+- A Bilibili-style Home view with a six-item recent/played carousel, pinned picks, recent additions, favorites, local videos and category rows.
+- Optional deletion of the local source file, only after an explicit confirmation checkbox.
+- The plugin has no accounts, ads or telemetry. Network access is limited to metadata and cover requests for the links the user adds. External file access is limited to files the user explicitly chooses.
+- Desktop only: Node.js and Electron APIs are required for external files and native file dialogs.
+
+See the Chinese sections below for the complete feature list and usage notes.
+
+---
+
+> 当前版本：`0.5.1`  
 > 已在 Obsidian `1.14.5`（Windows 桌面版）实际测试通过。  
 > 插件类型：仅桌面端。
 

@@ -79,15 +79,19 @@ export class ConfirmModal extends Modal {
       cls: this.options.danger ? "mod-warning" : "mod-cta",
       attr: { type: "button" }
     });
-    confirm.addEventListener("click", async () => {
-      confirm.disabled = true;
-      this.confirmed = true;
-      try {
-        await this.options.onConfirm(Boolean(checkbox?.checked));
-      } finally {
-        this.close();
-      }
+    confirm.addEventListener("click", () => {
+      void this.submit(confirm, checkbox);
     });
+  }
+
+  private async submit(confirm: HTMLButtonElement, checkbox: HTMLInputElement | null): Promise<void> {
+    confirm.disabled = true;
+    this.confirmed = true;
+    try {
+      await this.options.onConfirm(Boolean(checkbox?.checked));
+    } finally {
+      this.close();
+    }
   }
 
   onClose(): void {

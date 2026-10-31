@@ -63,7 +63,7 @@ export class CategoryManagerModal extends Modal {
   private renderRow(list: HTMLElement, category: Category): void {
     const row = list.createDiv({ cls: "vl-category-row" });
     const dot = row.createSpan({ cls: "vl-category-dot" });
-    dot.style.backgroundColor = category.color;
+    dot.setCssStyles({ backgroundColor: category.color });
     const info = row.createDiv({ cls: "vl-category-info" });
     info.createSpan({ text: category.name, cls: "vl-category-name" });
     info.createSpan({
@@ -143,7 +143,7 @@ export class CategoryEditModal extends Modal {
         cls: "vl-color-swatch",
         attr: { type: "button", "aria-label": color, title: color }
       });
-      swatch.style.backgroundColor = color;
+      swatch.setCssStyles({ backgroundColor: color });
       if (color === this.color) swatch.addClass("is-selected");
       swatch.addEventListener("click", () => {
         this.color = color;

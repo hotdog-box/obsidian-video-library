@@ -1,3 +1,4 @@
+import { getLanguage as getObsidianLanguage } from "obsidian";
 import type { LanguageSetting, Provider } from "./types";
 
 export type Lang = "zh" | "en";
@@ -707,7 +708,7 @@ let currentLanguage: Lang = "zh";
 export function resolveLanguage(setting: LanguageSetting): Lang {
   if (setting === "zh" || setting === "en") return setting;
   try {
-    const stored = window.localStorage.getItem("language");
+    const stored = getObsidianLanguage();
     if (stored) return stored.toLowerCase().startsWith("zh") ? "zh" : "en";
   } catch {
     // ignore

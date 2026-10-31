@@ -51,8 +51,7 @@ export class HoverPreview {
     const requestedVolume = Number(this.options.volume);
     this.volume = Number.isFinite(requestedVolume) ? Math.min(1, Math.max(0, requestedVolume)) : 0.8;
 
-    const video = document.createElement("video");
-    video.className = "vl-hover-video";
+    const video = this.cover.createEl("video", { cls: "vl-hover-video" });
     video.muted = this.muted;
     video.volume = this.volume;
     video.playsInline = true;
@@ -61,12 +60,11 @@ export class HoverPreview {
     video.setAttribute("aria-hidden", "true");
     video.src = this.source;
     this.video = video;
-    this.cover.appendChild(video);
 
-    this.badge = document.createElement("span");
-    this.badge.className = "vl-preview-badge";
-    this.badge.textContent = t("player.preview");
-    this.cover.appendChild(this.badge);
+    this.badge = this.cover.createSpan({
+      cls: "vl-preview-badge",
+      text: t("player.preview")
+    });
 
     this.buildAudioControls();
 
@@ -78,12 +76,12 @@ export class HoverPreview {
   }
 
   private buildAudioControls(): void {
-    const audio = document.createElement("div");
-    audio.className = "vl-preview-audio";
+    const audio = this.cover.createDiv({ cls: "vl-preview-audio" });
 
-    const button = document.createElement("button");
-    button.className = "vl-preview-mute";
-    button.type = "button";
+    const button = audio.createEl("button", {
+      cls: "vl-preview-mute",
+      attr: { type: "button" }
+    });
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       this.muted = !this.muted;
@@ -93,12 +91,10 @@ export class HoverPreview {
       this.emitAudioChange();
     });
 
-    const slider = document.createElement("input");
-    slider.className = "vl-preview-volume";
-    slider.type = "range";
-    slider.min = "0";
-    slider.max = "1";
-    slider.step = "0.01";
+    const slider = audio.createEl("input", {
+      cls: "vl-preview-volume",
+      attr: { type: "range", min: "0", max: "1", step: "0.01" }
+    });
     slider.value = String(this.volume);
     slider.setAttribute("aria-label", t("player.volume"));
     slider.addEventListener("input", (event) => {
@@ -112,8 +108,6 @@ export class HoverPreview {
 
     audio.addEventListener("click", (event) => event.stopPropagation());
     audio.addEventListener("pointerdown", (event) => event.stopPropagation());
-    audio.append(button, slider);
-    this.cover.appendChild(audio);
     this.audioEl = audio;
     this.muteButton = button;
     this.volumeSlider = slider;

@@ -27,9 +27,50 @@ export type CategoryMutationResult =
   | { ok: true; category: Category }
   | { ok: false; reason: "empty" | "duplicate" };
 
-function nodeRequire(id: string): any {
+interface DirentLike {
+  name: string;
+  isDirectory: () => boolean;
+  isFile: () => boolean;
+}
+
+interface FsLike {
+  existsSync: (path: string) => boolean;
+  mkdirSync: (path: string, options?: { recursive?: boolean }) => void;
+  unlinkSync: (path: string) => void;
+  linkSync: (existingPath: string, newPath: string) => void;
+  copyFileSync: (existingPath: string, newPath: string) => void;
+  readdirSync: (path: string, options: { withFileTypes: true }) => DirentLike[];
+  promises?: {
+    unlink?: (path: string) => Promise<void>;
+  };
+}
+
+interface PathLike {
+  basename: (path: string) => string;
+  join: (...parts: string[]) => string;
+}
+
+interface ElectronLike {
+  shell?: {
+    trashItem?: (path: string) => Promise<void>;
+  };
+}
+
+function nodeRequire<T>(id: string): T | null {
   const loader = (window as unknown as { require?: (module: string) => unknown }).require;
-  return typeof loader === "function" ? loader(id) : null;
+  return typeof loader === "function" ? (loader(id) as T) : null;
+}
+
+function getNodeFs(): FsLike | null {
+  return nodeRequire<FsLike>("fs");
+}
+
+function getNodePath(): PathLike | null {
+  return nodeRequire<PathLike>("path");
+}
+
+function getElectron(): ElectronLike | null {
+  return nodeRequire<ElectronLike>("electron");
 }
 
 function externalFileUrl(path: string): string {
@@ -63,7 +104,7 @@ export default class VideoLibraryPlugin extends Plugin {
     await this.loadSettings();
     setLanguage(this.data.settings.language);
 
-    const pluginDir = this.manifest.dir || ".obsidian/plugins/video-library";
+    const pluginDir = this.manifest.dir || `${this.app.vault.configDir}/plugins/video-library`;
     this.coverStore = new CoverStore(this.app, pluginDir);
 
     this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => new VideoLibraryView(leaf, this));
@@ -73,7 +114,7 @@ export default class VideoLibraryPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "open-video-library",
+      id: "open",
       name: t("action.openLibrary"),
       callback: () => {
         void this.openView();
@@ -92,7 +133,6 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   onunload(): void {
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE);
     this.coverStore?.dispose();
   }
 
@@ -204,7 +244,7 @@ export default class VideoLibraryPlugin extends Plugin {
               lastPlayedAt: Number(video.lastPlayedAt) || undefined,
               createdAt: Number(video.createdAt) || Date.now(),
               updatedAt: Number(video.updatedAt) || Number(video.createdAt) || Date.now()
-            } as VideoItem;
+            };
           })
       : [];
 
@@ -501,7 +541,7 @@ export default class VideoLibraryPlugin extends Plugin {
         };
         this.data.tags.push(tag);
       }
-      if (!canonical.some((name) => name.toLowerCase() === tag!.name.toLowerCase())) {
+      if (!canonical.some((name) => name.toLowerCase() === tag.name.toLowerCase())) {
         canonical.push(tag.name);
       }
     }
@@ -565,7 +605,7 @@ export default class VideoLibraryPlugin extends Plugin {
     folderId: string | null = null,
     categoryId = UNCATEGORIZED_ID
   ): Promise<{ imported: number; skipped: number }> {
-    const nodePath = nodeRequire("path");
+    const nodePath = getNodePath();
     let imported = 0;
     let skipped = 0;
     for (const filePath of paths) {
@@ -573,7 +613,7 @@ export default class VideoLibraryPlugin extends Plugin {
         skipped += 1;
         continue;
       }
-      const name = nodePath.basename(filePath) as string;
+      const name = nodePath.basename(filePath);
       const title = name.replace(/\.[^.]+$/, "") || name;
       const now = Date.now() - imported;
       const video: VideoItem = {
@@ -605,8 +645,8 @@ export default class VideoLibraryPlugin extends Plugin {
     parentFolderId: string | null = null,
     categoryId = UNCATEGORIZED_ID
   ): Promise<{ imported: number; skipped: number; folders: number }> {
-    const fs = nodeRequire("fs");
-    const nodePath = nodeRequire("path");
+    const fs = getNodeFs();
+    const nodePath = getNodePath();
     if (!fs?.readdirSync || !nodePath?.basename) return { imported: 0, skipped: 0, folders: 0 };
     const videoExtensions = new Set([
       "mp4", "mkv", "webm", "mov", "avi", "wmv", "flv", "m4v", "ts", "mpg", "mpeg", "rmvb", "3gp"
@@ -822,7 +862,7 @@ export default class VideoLibraryPlugin extends Plugin {
     const relative = this.externalLinkRelative(video.localPath);
     if (!relative) return;
     const absolute = this.externalLinkAbsolute(relative);
-    const fs = nodeRequire("fs");
+    const fs = getNodeFs();
     if (!absolute || !fs?.existsSync || !fs?.linkSync || !fs.existsSync(video.localPath)) return;
     try {
       fs.mkdirSync(absolute.slice(0, absolute.lastIndexOf("/")), { recursive: true });
@@ -841,7 +881,7 @@ export default class VideoLibraryPlugin extends Plugin {
   private removeExternalLink(video: VideoItem): void {
     if (!video.localLinkPath) return;
     const absolute = this.externalLinkAbsolute(video.localLinkPath);
-    const fs = nodeRequire("fs");
+    const fs = getNodeFs();
     try {
       if (absolute && fs?.existsSync?.(absolute) && fs?.unlinkSync) fs.unlinkSync(absolute);
     } catch {
@@ -851,7 +891,7 @@ export default class VideoLibraryPlugin extends Plugin {
 
   externalFileExists(path: string | undefined): boolean {
     if (!path) return false;
-    const fs = nodeRequire("fs");
+    const fs = getNodeFs();
     if (!fs?.existsSync) return true;
     try {
       return Boolean(fs.existsSync(path));
@@ -868,7 +908,7 @@ export default class VideoLibraryPlugin extends Plugin {
     if (!video.localPath) return false;
     try {
       if (video.localExternal) {
-        const electron = nodeRequire("electron");
+        const electron = getElectron();
         if (electron?.shell?.trashItem) {
           try {
             await electron.shell.trashItem(video.localPath);
@@ -877,22 +917,14 @@ export default class VideoLibraryPlugin extends Plugin {
             // Fall back to unlinking if the shell trash API is unavailable.
           }
         }
-        const fs = nodeRequire("fs");
+        const fs = getNodeFs();
         if (!fs?.promises?.unlink) return false;
         await fs.promises.unlink(video.localPath);
         return true;
       }
       const file = this.getLocalFile(video.localPath);
       if (!file) return false;
-      if (this.app.fileManager?.trashFile) {
-        try {
-          await this.app.fileManager.trashFile(file);
-          return true;
-        } catch {
-          // Fall back to a direct vault delete.
-        }
-      }
-      await this.app.vault.delete(file);
+      await this.app.fileManager.trashFile(file);
       return true;
     } catch {
       return false;
@@ -906,7 +938,7 @@ export default class VideoLibraryPlugin extends Plugin {
         const relative = video.localLinkPath || this.externalLinkRelative(video.localPath);
         if (!relative) return null;
         const absolute = this.externalLinkAbsolute(relative);
-        const fs = nodeRequire("fs");
+        const fs = getNodeFs();
         if (absolute && fs?.existsSync?.(absolute)) {
           return this.app.vault.adapter.getResourcePath(relative);
         }

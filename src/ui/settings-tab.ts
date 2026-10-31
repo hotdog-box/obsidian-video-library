@@ -13,7 +13,7 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass("vl-settings");
 
-    containerEl.createEl("h2", { text: t("settings.title") });
+    new Setting(containerEl).setName(t("settings.title")).setHeading();
     containerEl.createEl("p", { text: t("app.tagline"), cls: "vl-settings-tagline" });
 
     new Setting(containerEl)
@@ -54,7 +54,7 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
         });
       });
 
-    const dataPath = `${this.plugin.manifest.dir || ".obsidian/plugins/video-library"}/data.json`;
+    const dataPath = `${this.plugin.manifest.dir || `${this.app.vault.configDir}/plugins/video-library`}/data.json`;
     const dataSetting = new Setting(containerEl)
       .setName(t("settings.data"))
       .setDesc(t("settings.dataDesc", { path: dataPath }));

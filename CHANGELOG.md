@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.1 — 2026-10-31
+
+- Address Obsidian community review findings.
+- Replace direct style assignments with `setCssStyles` and Obsidian `createEl` helpers.
+- Stop detaching the view leaf in `onunload`.
+- Use `Setting.setHeading` in settings.
+- Use Obsidian `getLanguage` and `vault.configDir`.
+- Remove the plugin ID from command IDs.
+- Use `FileManager.trashFile` for vault-local file deletion.
+- Improve Node/Electron typings and Promise handling.
+- Remove all `!important` declarations from CSS while preserving button styling.
+- Add an English README overview and expand privacy/network/file-access disclosures.
+
 ## 0.5.0 — 2026-10-31
 
 - Fix external file selection: use the native Electron file dialog and read paths with `webUtils.getPathForFile`.

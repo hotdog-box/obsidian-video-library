@@ -34,7 +34,7 @@ export class TagManagerModal extends Modal {
     for (const tag of this.plugin.data.tags) {
       const row = list.createDiv({ cls: "vl-tag-row" });
       const dot = row.createSpan({ cls: "vl-tag-dot" });
-      dot.style.backgroundColor = tag.color;
+      dot.setCssStyles({ backgroundColor: tag.color });
       const name = row.createDiv({ cls: "vl-tag-name" });
       name.createSpan({ text: tag.name });
       name.createSpan({

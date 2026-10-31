@@ -41,7 +41,7 @@ export class VideoPlayerModal extends Modal {
     const category = this.plugin.getCategory(this.item.categoryId);
     const categoryEl = meta.createSpan({ cls: "vl-player-category" });
     const dot = categoryEl.createSpan({ cls: "vl-category-dot" });
-    dot.style.backgroundColor = category?.color || "var(--text-faint)";
+    dot.setCssStyles({ backgroundColor: category?.color || "var(--text-faint)" });
     categoryEl.createSpan({ text: this.plugin.categoryName(this.item.categoryId) });
     if (this.item.author) {
       meta.createSpan({ text: this.item.author, cls: "vl-player-author" });

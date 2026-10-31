@@ -165,18 +165,19 @@ export class CoverStore {
   }
 
   async captureVideoFrame(src: string, ratio = 0.12): Promise<ArrayBuffer | null> {
-    const video = document.createElement("video");
+    const video = document.body.createEl("video");
     video.preload = "auto";
     video.muted = true;
     video.playsInline = true;
-    video.style.position = "fixed";
-    video.style.left = "-9999px";
-    video.style.top = "0";
-    video.style.width = "2px";
-    video.style.height = "2px";
-    video.style.opacity = "0";
+    video.setCssStyles({
+      position: "fixed",
+      left: "-9999px",
+      top: "0",
+      width: "2px",
+      height: "2px",
+      opacity: "0"
+    });
     video.src = src;
-    document.body.appendChild(video);
 
     try {
       video.load();
@@ -212,13 +213,14 @@ export class CoverStore {
       if (!width || !height || video.readyState < 2) return null;
       const maxWidth = 1280;
       const scale = Math.min(1, maxWidth / width);
-      const canvas = document.createElement("canvas");
+      const canvas = document.body.createEl("canvas");
       canvas.width = Math.round(width * scale);
       canvas.height = Math.round(height * scale);
       const context = canvas.getContext("2d");
       if (!context) return null;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+      canvas.remove();
       return blob ? await blob.arrayBuffer() : null;
     } catch {
       return null;

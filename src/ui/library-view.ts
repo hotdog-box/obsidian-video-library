@@ -14,7 +14,7 @@ import { PreviewConfigModal } from "./preview-config-modal";
 
 export const VIEW_TYPE = "video-library-view";
 
-type Filter = "home" | "all" | "favorites" | typeof UNCATEGORIZED_ID | string;
+type Filter = string;
 
 export class VideoLibraryView extends ItemView {
   private filter: Filter = "home";
@@ -195,7 +195,7 @@ export class VideoLibraryView extends ItemView {
       });
       item.dataset.categoryId = category.id;
       const dot = item.createSpan({ cls: "vl-category-dot" });
-      dot.style.backgroundColor = category.color;
+      dot.setCssStyles({ backgroundColor: category.color });
       item.createSpan({ text: category.name, cls: "vl-nav-label" });
       item.createSpan({ text: String(this.plugin.categoryCount(category.id)), cls: "vl-nav-count" });
       this.bindNavItem(item, category.id);
@@ -277,8 +277,8 @@ export class VideoLibraryView extends ItemView {
       if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
       const rect = item.getBoundingClientRect();
       const after = event.clientY > rect.top + rect.height / 2;
-      for (const nav of Array.from(item.parentElement?.children || []) as HTMLElement[]) {
-        nav.removeClass("drop-before", "drop-after");
+      for (const nav of Array.from(item.parentElement?.children || [])) {
+        nav.classList.remove("drop-before", "drop-after");
       }
       item.addClass(after ? "drop-after" : "drop-before");
     });
@@ -303,7 +303,7 @@ export class VideoLibraryView extends ItemView {
 
   private clearCategoryDragState(): void {
     this.categoryDragId = null;
-    for (const item of Array.from(this.bodyEl().querySelectorAll(".vl-category-nav-item")) as HTMLElement[]) {
+    for (const item of Array.from(this.bodyEl().querySelectorAll<HTMLElement>(".vl-category-nav-item"))) {
       item.removeClass("is-dragging", "drop-before", "drop-after");
     }
   }
@@ -598,8 +598,8 @@ export class VideoLibraryView extends ItemView {
         description.addClass("is-hidden");
       }
 
-      for (const dot of Array.from(dots.children) as HTMLElement[]) {
-        dot.toggleClass("is-active", Number(dot.dataset.index) === this.homeCarouselIndex);
+      for (const dot of Array.from(dots.children)) {
+        dot.classList.toggle("is-active", Number(dot.getAttribute("data-index")) === this.homeCarouselIndex);
       }
     };
 
@@ -652,7 +652,7 @@ export class VideoLibraryView extends ItemView {
     const title = head.createDiv({ cls: "vl-home-section-title" });
     if (color) {
       const dot = title.createSpan({ cls: "vl-category-dot" });
-      dot.style.backgroundColor = color;
+      dot.setCssStyles({ backgroundColor: color });
     } else {
       setIcon(title.createSpan({ cls: "vl-home-section-icon" }), icon);
     }
@@ -880,7 +880,7 @@ export class VideoLibraryView extends ItemView {
         }
       });
       const dot = chip.createSpan({ cls: "vl-tag-dot" });
-      dot.style.backgroundColor = tag.color;
+      dot.setCssStyles({ backgroundColor: tag.color });
       chip.createSpan({ text: tag.name });
       chip.addEventListener("click", () => this.toggleTagFilter(tag.name));
     }
@@ -920,7 +920,7 @@ export class VideoLibraryView extends ItemView {
 
   private updateTagFilterUi(): void {
     if (!this.tagFilterBar) return;
-    for (const chip of Array.from(this.tagFilterChips.querySelectorAll(".vl-tag-chip")) as HTMLElement[]) {
+    for (const chip of Array.from(this.tagFilterChips.querySelectorAll<HTMLElement>(".vl-tag-chip"))) {
       const active = this.selectedTags.has(chip.dataset.tagName || "");
       chip.toggleClass("is-active", active);
       chip.setAttribute("aria-pressed", active ? "true" : "false");
@@ -976,12 +976,12 @@ export class VideoLibraryView extends ItemView {
       button.disabled = index === actionButtons.length - 1 ? count === 0 : this.selectedIds.size === 0;
     });
 
-    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
       const type = card.dataset.itemType === "folder" ? "folder" : "video";
       const id = card.dataset.itemId || card.dataset.videoId || "";
       const selected = type === "folder" ? this.selectedFolderIds.has(id) : this.selectedIds.has(id);
       card.toggleClass("is-selected", selected);
-      const check = card.querySelector(".vl-card-check") as HTMLElement | null;
+      const check = card.querySelector<HTMLElement>(".vl-card-check");
       if (check) {
         check.toggleClass("is-checked", selected);
         check.setAttribute("aria-pressed", selected ? "true" : "false");
@@ -1189,9 +1189,7 @@ export class VideoLibraryView extends ItemView {
     if (!this.marqueeMoved) {
       this.marqueeMoved = true;
       this.blockNextClick = true;
-      const marquee = document.createElement("div");
-      marquee.className = "vl-marquee";
-      document.body.appendChild(marquee);
+      const marquee = document.body.createDiv({ cls: "vl-marquee" });
       this.marqueeEl = marquee;
       this.gridWrap.addClass("is-marquee-active");
     }
@@ -1202,14 +1200,16 @@ export class VideoLibraryView extends ItemView {
     const width = Math.abs(dx);
     const height = Math.abs(dy);
     if (this.marqueeEl) {
-      this.marqueeEl.style.left = `${left}px`;
-      this.marqueeEl.style.top = `${top}px`;
-      this.marqueeEl.style.width = `${width}px`;
-      this.marqueeEl.style.height = `${height}px`;
+      this.marqueeEl.setCssStyles({
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${width}px`,
+        height: `${height}px`
+      });
     }
 
     const hits = new Set(this.marqueeHits({ left, top, right: left + width, bottom: top + height }));
-    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
       const type = card.dataset.itemType === "folder" ? "folder" : "video";
       const id = card.dataset.itemId || card.dataset.videoId || "";
       card.toggleClass("is-marquee-hit", hits.has(this.selectionKey(type, id)));
@@ -1234,7 +1234,7 @@ export class VideoLibraryView extends ItemView {
     this.marqueeStart = null;
     this.gridWrap.removeClass("is-marquee-active");
 
-    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
       card.removeClass("is-marquee-hit");
     }
 
@@ -1258,7 +1258,7 @@ export class VideoLibraryView extends ItemView {
 
   private marqueeHits(rect: { left: number; top: number; right: number; bottom: number }): string[] {
     const hits: string[] = [];
-    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
       const cardRect = card.getBoundingClientRect();
       const intersects =
         cardRect.left < rect.right &&
@@ -1396,7 +1396,7 @@ export class VideoLibraryView extends ItemView {
   }
 
   private clearDropIndicators(): void {
-    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
       card.removeClass("drop-before", "drop-after", "drop-into");
     }
   }
@@ -1404,7 +1404,7 @@ export class VideoLibraryView extends ItemView {
   private clearDragState(): void {
     this.draggingId = null;
     this.dragPayload = null;
-    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
       card.removeClass("is-dragging", "drop-before", "drop-after", "drop-into");
     }
   }
@@ -1800,7 +1800,7 @@ export class VideoLibraryView extends ItemView {
     const category = this.plugin.getCategory(video.categoryId);
     const categoryEl = meta.createSpan({ cls: "vl-card-category" });
     const dot = categoryEl.createSpan({ cls: "vl-category-dot" });
-    dot.style.backgroundColor = category?.color || "var(--text-faint)";
+    dot.setCssStyles({ backgroundColor: category?.color || "var(--text-faint)" });
     categoryEl.createSpan({ text: this.plugin.categoryName(video.categoryId) });
     if (video.author) {
       meta.createSpan({ text: video.author, cls: "vl-card-author" });
@@ -1816,7 +1816,7 @@ export class VideoLibraryView extends ItemView {
       }
     }
 
-    const date = body.createDiv({ cls: "vl-card-date", text: formatDate(video.createdAt) });
+    body.createDiv({ cls: "vl-card-date", text: formatDate(video.createdAt) });
 
     const previewSource =
       video.provider === "local" || video.provider === "direct" ? this.plugin.getVideoSource(video) : null;

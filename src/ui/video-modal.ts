@@ -12,6 +12,19 @@ import { PreviewConfigModal } from "./preview-config-modal";
 
 type SourceMode = "url" | "local";
 
+interface ElectronRemoteLike {
+  dialog?: {
+    showOpenDialog?: (...args: unknown[]) => Promise<{ canceled?: boolean; filePaths?: string[] }>;
+  };
+  getCurrentWindow?: () => unknown;
+}
+
+interface ElectronLike {
+  webUtils?: {
+    getPathForFile?: (file: File) => string;
+  };
+}
+
 export class VideoEditModal extends Modal {
   private item: VideoItem | null;
   private sourceMode: SourceMode;
@@ -113,7 +126,7 @@ export class VideoEditModal extends Modal {
 
     this.updateSourceVisibility();
     this.populateFields();
-    this.renderCover();
+    void this.renderCover();
     this.updateProviderBadge();
 
     if (!this.item) {
@@ -264,8 +277,8 @@ export class VideoEditModal extends Modal {
   }
 
   private async pickExternalPaths(mode: "file" | "files" | "folder"): Promise<string[]> {
-    const loader = (window as unknown as { require?: (module: string) => any }).require;
-    const remote = loader?.("@electron/remote");
+    const loader = (window as unknown as { require?: (module: string) => unknown }).require;
+    const remote = loader?.("@electron/remote") as ElectronRemoteLike | undefined;
     if (remote?.dialog?.showOpenDialog) {
       const properties =
         mode === "folder"
@@ -273,7 +286,7 @@ export class VideoEditModal extends Modal {
           : mode === "files"
             ? ["openFile", "multiSelections"]
             : ["openFile"];
-      const result = await remote.dialog.showOpenDialog(remote.getCurrentWindow(), {
+      const result = await remote.dialog.showOpenDialog(remote.getCurrentWindow?.(), {
         title: mode === "folder" ? t("form.chooseExternalFolder") : t("form.chooseExternalVideo"),
         properties,
         filters: [
@@ -286,17 +299,15 @@ export class VideoEditModal extends Modal {
       return result.canceled ? [] : result.filePaths || [];
     }
     return new Promise((resolve) => {
-      const input = document.createElement("input");
-      input.type = "file";
+      const input = document.body.createEl("input", { attr: { type: "file" } });
       input.multiple = mode !== "file";
       if (mode === "folder") input.setAttribute("webkitdirectory", "true");
       input.accept = "video/*,.mkv,.avi,.mov,.wmv,.flv,.rmvb,.ts,.m4v,.mpg,.mpeg,.webm";
-      input.style.display = "none";
-      document.body.appendChild(input);
+      input.setCssStyles({ display: "none" });
       input.addEventListener("change", () => {
         const paths = Array.from(input.files || [])
           .map((file) => {
-            const webUtils = loader?.("electron")?.webUtils;
+            const webUtils = (loader?.("electron") as ElectronLike | undefined)?.webUtils;
             return webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path || "";
           })
           .filter(Boolean);
@@ -430,7 +441,7 @@ export class VideoEditModal extends Modal {
       const tag = this.plugin.getTagByName(name);
       const chip = this.tagChipsEl.createSpan({ cls: "vl-selected-tag" });
       const dot = chip.createSpan({ cls: "vl-tag-dot" });
-      dot.style.backgroundColor = tag?.color || "var(--interactive-accent)";
+      dot.setCssStyles({ backgroundColor: tag?.color || "var(--interactive-accent)" });
       chip.createSpan({ text: name });
       const remove = chip.createEl("button", {
         cls: "vl-selected-tag-remove",
@@ -458,7 +469,7 @@ export class VideoEditModal extends Modal {
     const section = this.contentEl.createDiv({ cls: "vl-form-section vl-cover-section" });
     const heading = section.createDiv({ cls: "vl-cover-heading" });
     heading.createEl("label", { text: t("form.cover"), cls: "vl-field-label" });
-    heading.createEl("span", { text: t("form.coverHint"), cls: "vl-field-hint" });
+    heading.createSpan({ text: t("form.coverHint"), cls: "vl-field-hint" });
 
     const body = section.createDiv({ cls: "vl-cover-editor" });
     const preview = body.createDiv({ cls: "vl-cover-preview" });

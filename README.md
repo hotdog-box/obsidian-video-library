@@ -4,7 +4,7 @@
 
 ![视频库界面](docs/demo-grid.png)
 
-> 当前版本：`0.1.0`  
+> 当前版本：`0.5.0`  
 > 已在 Obsidian `1.14.5`（Windows 桌面版）实际测试通过。  
 > 插件类型：仅桌面端。
 
@@ -68,6 +68,32 @@
 - **数据持久化**
   - 视频、分类、文件夹、标签、设置保存在插件的 `data.json`
   - 封面保存在插件目录的 `covers/` 下，可随插件目录一起备份
+
+---
+
+## 安装
+
+### 社区插件市场
+
+审核通过后，在 Obsidian 中打开“设置 → 第三方插件 → 浏览”，搜索 **Video Library** 安装并启用。
+
+### 手动安装
+
+从 [Releases](https://github.com/hotdog-box/obsidian-video-library/releases) 下载：
+
+- `main.js`
+- `manifest.json`
+- `styles.css`
+
+放到：
+
+```text
+<你的仓库>/.obsidian/plugins/video-library/
+```
+
+然后在“设置 → 第三方插件”中启用 **Video Library**。
+
+> 仅支持 Obsidian 桌面版。
 
 ---
 
@@ -223,14 +249,57 @@ GitHub Release 建议附上这三个文件，方便直接安装：
 
 ---
 
+## 网络访问与隐私 / Privacy and network access
+
+### 中文
+
+这个插件**没有账号系统、没有广告、没有遥测**。所有视频、分类、标签、文件夹和设置都只保存在本地插件目录的 `data.json` 中。
+
+只有在用户添加视频、刷新信息或更换封面时，插件才会访问网络：
+
+- **B 站**：访问 `bilibili.com` / `api.bilibili.com` 获取视频、番剧的标题、作者、时长和封面；
+- **YouTube**：访问 `youtube.com` 的 oEmbed 接口和 `ytimg.com` 的封面；
+- **Vimeo**：访问 `vimeo.com` 的 oEmbed 接口；
+- **普通网页**：访问用户粘贴的网页，读取标题和封面元数据；
+- **封面图片**：访问用户提供的图片 URL。
+
+这些请求只用于填充视频信息和封面，不会上传视频库内容。插件不会在后台定期联网。
+
+### 仓库外文件
+
+为了支持仓库外的本地视频，插件会读取用户明确选择的绝对路径文件，并在插件目录的 `external-links/` 下建立硬链接（跨盘时复制一份播放缓存）供 Obsidian 播放。删除视频时默认**不会**删除本地文件；只有用户在确认框中勾选“同时删除本地视频文件”时，才会把源文件移到系统回收站。
+
+### English
+
+This plugin has **no accounts, no ads and no telemetry**. All videos, categories, tags, folders and settings are stored locally in the plugin's `data.json`.
+
+The plugin only accesses the network when the user adds a video, refreshes metadata or changes a cover:
+
+- **Bilibili**: `bilibili.com` / `api.bilibili.com` for video and bangumi metadata and covers;
+- **YouTube**: the oEmbed endpoint on `youtube.com` and thumbnails from `ytimg.com`;
+- **Vimeo**: the oEmbed endpoint on `vimeo.com`;
+- **Generic pages**: the page URL entered by the user, to read title and cover metadata;
+- **Cover images**: image URLs explicitly provided by the user.
+
+These requests only fill in video information and covers. Library contents are never uploaded, and the plugin does not poll the network in the background.
+
+For local videos outside the vault, the plugin reads files at absolute paths explicitly chosen by the user. It creates a hard link in the plugin's `external-links/` folder for playback, or copies a playback cache when the source is on another volume. Deleting a video does **not** delete the original file unless the user ticks “Also delete the local video file” in the confirmation dialog, which moves the source file to the system trash.
+
+---
+
 ## English
 
-Video Library is an Obsidian desktop plugin for collecting video links with automatic covers and user-defined categories.
+Video Library is an Obsidian desktop plugin for collecting and watching video links, local files and folders with custom covers, tags and categories.
 
-- Supports Bilibili, YouTube, Vimeo, direct video URLs, generic web pages and local videos inside the vault.
-- Fetches title, author, duration and cover automatically; every cover can be replaced with an image URL, a local image, or a frame captured from a local video.
-- Custom categories with colors, tags, favorites, search, sorting, and a built-in player.
+- Supports Bilibili (including bangumi `ep`/`ss`), YouTube, Vimeo, direct video URLs, generic web pages, vault-local videos and external local files.
+- Home view with a six-item recent/played carousel, pinned videos, recent additions, favorites, local videos and category rows.
+- Tags with an Any/All filter, nested folders, breadcrumbs, Windows Explorer-style selection, multi-select drag and manual ordering.
+- Fetches title, author, duration and cover automatically; covers can be replaced with an image URL, a local image, or a frame captured from a video.
+- Custom categories with colors, right-click rename/delete and drag-to-reorder.
+- Multi-file external import and whole-folder import that preserves subfolders.
+- Optional deletion of the local source file, with an explicit confirmation checkbox.
 - Bilingual UI (Chinese / English), following Obsidian's language by default.
+- Desktop only, because external file access and playback use Node.js and Electron APIs.
 
 ### Development
 

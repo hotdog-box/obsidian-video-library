@@ -27,6 +27,7 @@ export class VideoEditModal extends Modal {
   private providerBadge!: HTMLElement;
   private localNameEl!: HTMLElement;
   private localPath?: string;
+  private localExternal = false;
   private titleInput!: HTMLInputElement;
   private categorySelect!: HTMLSelectElement;
   private tagChipsEl!: HTMLElement;
@@ -74,6 +75,7 @@ export class VideoEditModal extends Modal {
       : null;
     this.sourceMode = video?.provider === "local" ? "local" : "url";
     this.localPath = video?.localPath;
+    this.localExternal = Boolean(video?.localExternal);
     this.parsed = video?.url ? parseVideoUrl(video.url) : null;
     this.titleTouched = Boolean(video);
     this.author = video?.author;
@@ -198,6 +200,39 @@ export class VideoEditModal extends Modal {
     choose.addEventListener("click", () => {
       pickVaultFile(this.app, "video", (file) => this.selectLocalFile(file));
     });
+    const chooseExternal = localCard.createEl("button", {
+      text: t("form.chooseExternalVideo"),
+      attr: { type: "button" }
+    });
+    chooseExternal.addEventListener("click", () => this.chooseExternalVideo());
+  }
+
+  private chooseExternalVideo(): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/*,.mkv,.avi,.mov,.wmv,.flv,.rmvb,.ts,.m4v,.mpg,.mpeg,.webm";
+    input.style.display = "none";
+    document.body.appendChild(input);
+    input.addEventListener("change", () => {
+      const file = input.files?.[0] as (File & { path?: string }) | undefined;
+      if (file?.path) this.selectExternalFile(file.path, file.name);
+      input.remove();
+    });
+    input.addEventListener("cancel", () => input.remove());
+    input.click();
+  }
+
+  private selectExternalFile(path: string, name: string): void {
+    this.localPath = path;
+    this.localExternal = true;
+    this.updateLocalLabel();
+    this.updateSourceVisibility();
+    this.updateProviderBadge();
+    if (!this.titleTouched || !this.titleInput.value.trim()) {
+      this.titleInput.value = name.replace(/\.[^.]+$/, "");
+      this.titleTouched = false;
+    }
+    this.coverStatus.setText(t("form.coverFromVideo"));
   }
 
   private buildMainFields(): void {
@@ -418,6 +453,10 @@ export class VideoEditModal extends Modal {
 
   private getEditableVideoSource(): string | null {
     if (this.sourceMode === "local" && this.localPath) {
+      if (this.localExternal) {
+        if (!this.item?.localLinkPath) return null;
+        return this.app.vault.adapter.getResourcePath(this.item.localLinkPath);
+      }
       const file = this.plugin.getLocalFile(this.localPath);
       return file ? this.app.vault.adapter.getResourcePath(this.localPath) : null;
     }
@@ -493,7 +532,8 @@ export class VideoEditModal extends Modal {
   private updateLocalLabel(): void {
     if (!this.localNameEl) return;
     if (this.localPath) {
-      this.localNameEl.setText(t("form.localSelected", { name: this.localPath.split("/").pop() || this.localPath }));
+      const name = this.localPath.split(/[\\/]/).pop() || this.localPath;
+      this.localNameEl.setText(t(this.localExternal ? "form.localExternalSelected" : "form.localSelected", { name }));
       this.localNameEl.removeClass("is-muted");
     } else {
       this.localNameEl.setText(t("form.noLocal"));
@@ -503,6 +543,7 @@ export class VideoEditModal extends Modal {
 
   private selectLocalFile(file: TFile): void {
     this.localPath = file.path;
+    this.localExternal = false;
     this.updateLocalLabel();
     this.updateSourceVisibility();
     this.updateProviderBadge();
@@ -873,6 +914,7 @@ export class VideoEditModal extends Modal {
         coverPath,
         thumbnailUrl: this.metadata?.thumbnailUrl || this.item?.thumbnailUrl,
         localPath: isLocal ? this.localPath : undefined,
+        localExternal: isLocal ? this.localExternal : undefined,
         duration: this.metadata?.duration || this.item?.duration,
         epId: this.metadata?.epId || parsed?.epId || this.item?.epId,
         preview: this.previewConfig,

@@ -231,6 +231,26 @@
   color: var(--text-faint);
 }
 
+.vl-category-nav-item {
+  cursor: grab;
+}
+
+.vl-category-nav-item:active {
+  cursor: grabbing;
+}
+
+.vl-category-nav-item.is-dragging {
+  opacity: 0.45;
+}
+
+.vl-category-nav-item.drop-before {
+  box-shadow: inset 0 2px 0 var(--interactive-accent);
+}
+
+.vl-category-nav-item.drop-after {
+  box-shadow: inset 0 -2px 0 var(--interactive-accent);
+}
+
 .vl-category-dot {
   display: inline-block;
   flex: 0 0 7px;
@@ -832,6 +852,378 @@
 
 .vl-card-cover.is-previewing .vl-preview-audio {
   opacity: 1;
+}
+
+.vl-home {
+  padding: 22px 26px 46px;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 88% -10%, color-mix(in srgb, #fb7299 12%, transparent), transparent 42%),
+    var(--background-primary);
+}
+
+.vl-home-header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.vl-home-title h1 {
+  margin: 0;
+  font-size: 25px;
+  letter-spacing: -0.03em;
+}
+
+.vl-home-title p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.vl-home-header-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.vl-home-header-actions button {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 30px;
+  padding: 0 11px;
+  font-size: 10px;
+}
+
+.vl-home-hero {
+  position: relative;
+  display: flex;
+  min-height: 300px;
+  overflow: hidden;
+  background: linear-gradient(120deg, #2a1b31, #52243b 55%, #b44668);
+  border-radius: 14px;
+  isolation: isolate;
+}
+
+.vl-home-hero-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.vl-home-hero-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vl-home-hero::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  background:
+    linear-gradient(90deg, rgb(12 10 16 / 90%) 0%, rgb(12 10 16 / 55%) 48%, rgb(12 10 16 / 12%) 100%),
+    linear-gradient(0deg, rgb(12 10 16 / 74%), transparent 60%);
+}
+
+.vl-home-hero.is-no-cover .vl-home-hero-bg img {
+  display: none;
+}
+
+.vl-home-hero-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: min(650px, 75%);
+  padding: 34px 38px;
+  color: #fff;
+}
+
+.vl-home-hero-eyebrow {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  align-self: flex-start;
+  padding: 3px 8px;
+  margin-bottom: 9px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #ffd6e3;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: rgb(251 114 153 / 20%);
+  border: 1px solid rgb(251 114 153 / 42%);
+  border-radius: 20px;
+}
+
+.vl-home-hero-eyebrow svg {
+  width: 11px;
+  height: 11px;
+}
+
+.vl-home-hero-content h2 {
+  max-width: 620px;
+  margin: 0;
+  font-size: clamp(24px, 3.4vw, 38px);
+  line-height: 1.14;
+  color: #fff;
+  text-shadow: 0 2px 18px rgb(0 0 0 / 40%);
+}
+
+.vl-home-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin-top: 10px;
+  font-size: 10px;
+  color: rgb(255 255 255 / 72%);
+}
+
+.vl-home-hero-desc {
+  display: -webkit-box;
+  max-width: 540px;
+  margin-top: 8px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.55;
+  color: rgb(255 255 255 / 70%);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.vl-home-hero-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 17px;
+}
+
+.vl-home-hero-buttons button {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 31px;
+  padding: 0 14px;
+  font-size: 10px;
+  color: #fff;
+  background: rgb(255 255 255 / 14%);
+  border: 1px solid rgb(255 255 255 / 20%);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+
+.vl-home-hero-buttons .vl-home-play {
+  color: #fff;
+  background: #fb7299;
+  border-color: #fb7299;
+}
+
+.vl-home-hero-buttons button:hover {
+  background: rgb(255 255 255 / 24%);
+}
+
+.vl-home-hero-buttons .vl-home-play:hover {
+  background: #ff86ad;
+}
+
+.vl-home-section {
+  margin-top: 24px;
+}
+
+.vl-home-section-head {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-bottom: 9px;
+}
+
+.vl-home-section-title {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.vl-home-section-icon {
+  display: flex;
+  color: #fb7299;
+}
+
+.vl-home-section-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.vl-home-section-count {
+  padding: 0 5px;
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-faint);
+  background: var(--background-secondary);
+  border-radius: 20px;
+}
+
+.vl-home-more {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  height: 23px;
+  padding: 0 5px;
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: transparent !important;
+  border: 0;
+  box-shadow: none;
+}
+
+.vl-home-more:hover {
+  color: #fb7299;
+}
+
+.vl-home-more svg {
+  width: 11px;
+  height: 11px;
+}
+
+.vl-home-track {
+  display: flex;
+  gap: 11px;
+  padding: 2px 1px 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.vl-home-card {
+  flex: 0 0 176px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 9px;
+  transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+
+.vl-home-card:hover {
+  border-color: color-mix(in srgb, #fb7299 55%, var(--background-modifier-border));
+  box-shadow: 0 8px 20px rgb(0 0 0 / 10%);
+  transform: translateY(-2px);
+}
+
+.vl-home-card-cover {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: linear-gradient(135deg, #3b2233, #8e3f5a);
+}
+
+.vl-home-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vl-home-card-cover.is-no-cover img {
+  display: none;
+}
+
+.vl-home-card-duration:empty {
+  display: none;
+}
+
+.vl-home-card-duration {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 5px;
+  font-size: 8px;
+  color: #fff;
+  background: rgb(0 0 0 / 62%);
+  border-radius: 3px;
+}
+
+.vl-home-card-body {
+  padding: 8px 9px 10px;
+}
+
+.vl-home-card-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.vl-home-card-meta {
+  display: flex;
+  gap: 7px;
+  margin-top: 5px;
+  overflow: hidden;
+  font-size: 8px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.vl-home-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 55vh;
+  text-align: center;
+}
+
+.vl-home-empty-icon {
+  display: flex;
+  color: #fb7299;
+  opacity: 0.55;
+}
+
+.vl-home-empty-icon svg {
+  width: 52px;
+  height: 52px;
+}
+
+.vl-home-empty h2 {
+  margin: 13px 0 4px;
+  font-size: 18px;
+}
+
+.vl-home-empty p {
+  max-width: 430px;
+  margin: 0 0 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.vl-home-empty button {
+  height: 32px;
+  padding: 0 16px;
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .vl-home {
+    padding: 16px 14px 34px;
+  }
+
+  .vl-home-header {
+    align-items: flex-start;
+  }
+
+  .vl-home-hero-content {
+    width: 100%;
+    padding: 24px 20px;
+  }
+
+  .vl-home-card {
+    flex-basis: 150px;
+  }
 }
 
 .vl-folder-cover {
@@ -1836,6 +2228,23 @@
   font-size: 12px;
   line-height: 1.6;
   color: var(--text-muted);
+}
+
+.vl-confirm-checkbox {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  margin: -4px 0 14px;
+  font-size: 12px;
+  color: var(--text-normal);
+  cursor: pointer;
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+
+.vl-confirm-checkbox input {
+  margin: 0;
 }
 
 .vl-form-section {

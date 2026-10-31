@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 — 2026-10-31
+
+- Add external local video support: pick any video file on the computer without copying it into the vault.
+- External videos play through a hard link in `external-links/`; cross-volume files fall back to a playback copy.
+- Delete dialog can optionally move the local video file to the trash; batch delete supports the same option.
+- Add a Bilibili-style Home view with a featured hero, pinned picks, recent videos, favorites, local videos and category rows.
+- Home is now the default view; the library remains available from the sidebar.
+- Add category right-click menu with rename and delete.
+- Add drag-to-reorder categories in the sidebar.
+- Right-click any empty area in the library or home view to add a video, and create a folder from the menu.
+- Local vault and external files are both supported by player, preview and cover capture.
+
 ## 0.3.0 — 2026-10-31
 
 - Add folders, including nested folders, with create, rename and delete.

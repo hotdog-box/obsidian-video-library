@@ -104,6 +104,8 @@ export interface VideoItem {
   coverPath?: string;
   thumbnailUrl?: string;
   localPath?: string;
+  localExternal?: boolean;
+  localLinkPath?: string;
   duration?: number;
   epId?: number;
   preview?: PreviewConfig;

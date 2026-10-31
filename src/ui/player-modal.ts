@@ -92,8 +92,9 @@ export class VideoPlayerModal extends Modal {
         description: t("confirm.deleteVideoDesc", { title: this.item.title }),
         confirmText: t("confirm.delete"),
         danger: true,
-        onConfirm: async () => {
-          await this.plugin.deleteVideo(this.item);
+        checkbox: this.item.localPath ? { label: t("confirm.deleteLocalFile") } : undefined,
+        onConfirm: async (deleteLocalFile) => {
+          await this.plugin.deleteVideo(this.item, deleteLocalFile);
           new Notice(t("notice.deleted"));
           this.close();
         }

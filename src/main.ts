@@ -27,6 +27,26 @@ export type CategoryMutationResult =
   | { ok: true; category: Category }
   | { ok: false; reason: "empty" | "duplicate" };
 
+function nodeRequire(id: string): any {
+  const loader = (window as unknown as { require?: (module: string) => unknown }).require;
+  return typeof loader === "function" ? loader(id) : null;
+}
+
+function externalFileUrl(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  if (normalized.startsWith("//")) return `file:${encodeURI(normalized)}`;
+  return `file:///${encodeURI(normalized)}`;
+}
+
+function externalLinkName(path: string): string {
+  let hash = 5381;
+  for (let index = 0; index < path.length; index += 1) {
+    hash = (hash * 33) ^ path.charCodeAt(index);
+  }
+  const extension = path.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
+  return `ext_${(hash >>> 0).toString(36)}.${extension}`;
+}
+
 export type TagMutationResult =
   | { ok: true; tag: Tag }
   | { ok: false; reason: "empty" | "duplicate" };
@@ -171,6 +191,7 @@ export default class VideoLibraryPlugin extends Plugin {
               ...video,
               id: video.id || uid("vid"),
               provider,
+              localExternal: Boolean(video.localExternal),
               title: video.title || (video.url ? fallbackTitleFromUrl(video.url) : t("form.untitled")),
               categoryId:
                 video.categoryId && categoryIds.has(video.categoryId) ? video.categoryId : UNCATEGORIZED_ID,
@@ -205,6 +226,13 @@ export default class VideoLibraryPlugin extends Plugin {
       tags,
       settings
     };
+
+    for (const video of this.data.videos) {
+      if (video.localExternal) {
+        await this.ensureExternalLink(video);
+        if (video.localLinkPath) tagsMigrated = true;
+      }
+    }
 
     if (tagsMigrated) await this.persist();
   }
@@ -304,6 +332,17 @@ export default class VideoLibraryPlugin extends Plugin {
     await this.persist();
     this.refreshViews();
     return moved;
+  }
+
+  async reorderCategories(orderedIds: string[]): Promise<void> {
+    const positions = new Map(orderedIds.map((id, index) => [id, index]));
+    this.data.categories.sort((a, b) => {
+      const aPos = positions.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const bPos = positions.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return aPos - bPos;
+    });
+    await this.persist();
+    this.refreshViews();
   }
 
   getFolder(id: string): Folder | undefined {
@@ -514,6 +553,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async addVideo(video: VideoItem): Promise<void> {
+    await this.ensureExternalLink(video);
     this.data.videos.unshift(video);
     await this.persist();
     this.refreshViews();
@@ -521,6 +561,15 @@ export default class VideoLibraryPlugin extends Plugin {
 
   async updateVideo(video: VideoItem): Promise<void> {
     const index = this.data.videos.findIndex((candidate) => candidate.id === video.id);
+    const previous = index >= 0 ? this.data.videos[index] : undefined;
+    if (previous && (previous.localPath !== video.localPath || !video.localExternal)) {
+      this.removeExternalLink(previous);
+    }
+    if (video.localExternal) await this.ensureExternalLink(video);
+    else {
+      this.removeExternalLink(video);
+      video.localLinkPath = undefined;
+    }
     if (index >= 0) {
       this.data.videos[index] = video;
     } else {
@@ -530,15 +579,25 @@ export default class VideoLibraryPlugin extends Plugin {
     this.refreshViews();
   }
 
-  async deleteVideo(video: VideoItem): Promise<void> {
+  async deleteVideo(video: VideoItem, deleteLocalFile = false): Promise<void> {
+    if (deleteLocalFile && !(await this.deleteLocalSource(video))) {
+      new Notice(t("notice.localFileDeleteFailed"));
+    }
+    this.removeExternalLink(video);
     this.data.videos = this.data.videos.filter((candidate) => candidate.id !== video.id);
     await this.coverStore.delete(video.coverPath);
     await this.persist();
     this.refreshViews();
   }
 
-  async deleteVideos(videos: VideoItem[]): Promise<void> {
+  async deleteVideos(videos: VideoItem[], deleteLocalFiles = false): Promise<void> {
     const ids = new Set(videos.map((video) => video.id));
+    if (deleteLocalFiles) {
+      for (const video of videos) {
+        if (!(await this.deleteLocalSource(video))) new Notice(t("notice.localFileDeleteFailed"));
+      }
+    }
+    for (const video of videos) this.removeExternalLink(video);
     this.data.videos = this.data.videos.filter((candidate) => !ids.has(candidate.id));
     for (const video of videos) {
       await this.coverStore.delete(video.coverPath);
@@ -614,9 +673,115 @@ export default class VideoLibraryPlugin extends Plugin {
     return file instanceof TFile ? file : null;
   }
 
+  private externalLinkRelative(path: string): string | null {
+    if (!this.manifest.dir) return null;
+    return `${this.manifest.dir}/external-links/${externalLinkName(path)}`;
+  }
+
+  private externalLinkAbsolute(relative: string): string | null {
+    const base = (this.app.vault.adapter as unknown as { getBasePath?: () => string }).getBasePath?.();
+    if (!base) return null;
+    return `${base.replace(/[\\/]+$/, "")}/${relative}`;
+  }
+
+  async ensureExternalLink(video: VideoItem): Promise<void> {
+    if (!video.localExternal || !video.localPath) {
+      video.localLinkPath = undefined;
+      return;
+    }
+    const relative = this.externalLinkRelative(video.localPath);
+    if (!relative) return;
+    const absolute = this.externalLinkAbsolute(relative);
+    const fs = nodeRequire("fs");
+    if (!absolute || !fs?.existsSync || !fs?.linkSync || !fs.existsSync(video.localPath)) return;
+    try {
+      fs.mkdirSync(absolute.slice(0, absolute.lastIndexOf("/")), { recursive: true });
+      if (fs.existsSync(absolute)) fs.unlinkSync(absolute);
+      try {
+        fs.linkSync(video.localPath, absolute);
+      } catch {
+        fs.copyFileSync(video.localPath, absolute);
+      }
+      video.localLinkPath = relative;
+    } catch {
+      video.localLinkPath = undefined;
+    }
+  }
+
+  private removeExternalLink(video: VideoItem): void {
+    if (!video.localLinkPath) return;
+    const absolute = this.externalLinkAbsolute(video.localLinkPath);
+    const fs = nodeRequire("fs");
+    try {
+      if (absolute && fs?.existsSync?.(absolute) && fs?.unlinkSync) fs.unlinkSync(absolute);
+    } catch {
+      // The cached link is disposable.
+    }
+  }
+
+  externalFileExists(path: string | undefined): boolean {
+    if (!path) return false;
+    const fs = nodeRequire("fs");
+    if (!fs?.existsSync) return true;
+    try {
+      return Boolean(fs.existsSync(path));
+    } catch {
+      return false;
+    }
+  }
+
+  getExternalFileUrl(path: string): string {
+    return externalFileUrl(path);
+  }
+
+  async deleteLocalSource(video: VideoItem): Promise<boolean> {
+    if (!video.localPath) return false;
+    try {
+      if (video.localExternal) {
+        const electron = nodeRequire("electron");
+        if (electron?.shell?.trashItem) {
+          try {
+            await electron.shell.trashItem(video.localPath);
+            return true;
+          } catch {
+            // Fall back to unlinking if the shell trash API is unavailable.
+          }
+        }
+        const fs = nodeRequire("fs");
+        if (!fs?.promises?.unlink) return false;
+        await fs.promises.unlink(video.localPath);
+        return true;
+      }
+      const file = this.getLocalFile(video.localPath);
+      if (!file) return false;
+      if (this.app.fileManager?.trashFile) {
+        try {
+          await this.app.fileManager.trashFile(file);
+          return true;
+        } catch {
+          // Fall back to a direct vault delete.
+        }
+      }
+      await this.app.vault.delete(file);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   getVideoSource(video: VideoItem): string | null {
     if (video.provider === "local") {
       if (!video.localPath) return null;
+      if (video.localExternal) {
+        const relative = video.localLinkPath || this.externalLinkRelative(video.localPath);
+        if (!relative) return null;
+        const absolute = this.externalLinkAbsolute(relative);
+        const fs = nodeRequire("fs");
+        if (absolute && fs?.existsSync?.(absolute)) {
+          return this.app.vault.adapter.getResourcePath(relative);
+        }
+        return null;
+      }
       const file = this.getLocalFile(video.localPath);
       if (!file) return null;
       return this.app.vault.adapter.getResourcePath(video.localPath);

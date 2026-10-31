@@ -47,7 +47,8 @@ export class ConfirmModal extends Modal {
       confirmText: string;
       cancelText?: string;
       danger?: boolean;
-      onConfirm: () => void | Promise<void>;
+      checkbox?: { label: string; defaultChecked?: boolean };
+      onConfirm: (checked: boolean) => void | Promise<void>;
     }
   ) {
     super(app);
@@ -57,6 +58,14 @@ export class ConfirmModal extends Modal {
   onOpen(): void {
     this.titleEl.setText(this.options.title);
     this.contentEl.createEl("p", { text: this.options.description, cls: "vl-modal-description" });
+
+    let checkbox: HTMLInputElement | null = null;
+    if (this.options.checkbox) {
+      const label = this.contentEl.createEl("label", { cls: "vl-confirm-checkbox" });
+      checkbox = label.createEl("input", { type: "checkbox" });
+      checkbox.checked = Boolean(this.options.checkbox.defaultChecked);
+      label.createSpan({ text: this.options.checkbox.label });
+    }
 
     const buttons = this.contentEl.createDiv({ cls: "vl-modal-buttons" });
     const cancel = buttons.createEl("button", {
@@ -74,7 +83,7 @@ export class ConfirmModal extends Modal {
       confirm.disabled = true;
       this.confirmed = true;
       try {
-        await this.options.onConfirm();
+        await this.options.onConfirm(Boolean(checkbox?.checked));
       } finally {
         this.close();
       }

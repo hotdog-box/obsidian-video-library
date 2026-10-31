@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9 — 2026-10-31
+
+- The toolbar and batch-action bar are now sticky and stay visible while scrolling.
+- The batch bar is always visible; its actions are disabled until something is selected.
+- Box selection can start anywhere in the grid, including on a card, and works in all four drag directions.
+- Box selection now toggles cards by default: dragging over selected cards deselects them without holding Ctrl.
+- Shift still adds and Ctrl still removes; a drag no longer triggers the card's play action.
+
 ## 0.1.8 — 2026-10-31
 
 - Multi-select with card checkboxes, Ctrl/Cmd click and Shift range selection.

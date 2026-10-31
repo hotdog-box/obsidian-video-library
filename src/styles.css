@@ -285,6 +285,16 @@
   container-type: inline-size;
 }
 
+.vl-main-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding-top: 2px;
+  padding-bottom: 5px;
+  background: var(--background-primary);
+  box-shadow: 0 8px 14px -14px rgb(0 0 0 / 45%);
+}
+
 .vl-toolbar {
   display: flex;
   gap: 20px;
@@ -415,6 +425,7 @@
   flex-direction: column;
   overflow: hidden;
   cursor: pointer;
+  user-select: none;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 12px;
@@ -453,6 +464,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  -webkit-user-drag: none;
   transition: transform 300ms ease;
 }
 
@@ -815,6 +827,39 @@
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 9px;
+}
+
+.vl-selection-bar.is-empty {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  opacity: 0.78;
+}
+
+.vl-selection-bar.is-empty .vl-selection-hint {
+  display: none;
+}
+
+.vl-selection-btn:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.vl-selection-btn:disabled:hover {
+  color: var(--text-muted);
+  border-color: var(--background-modifier-border);
+}
+
+.vl-batch-category:disabled {
+  opacity: 0.45;
+}
+
+.vl-grid-wrap.is-marquee-active {
+  cursor: crosshair;
+  user-select: none;
+}
+
+.vl-grid-wrap.is-marquee-active * {
+  user-select: none;
 }
 
 .vl-selection-head {

@@ -34,8 +34,9 @@ export class VideoLibraryView extends ItemView {
   private selectionCountEl!: HTMLElement;
   private batchCategorySelect!: HTMLSelectElement;
   private marqueeEl: HTMLElement | null = null;
-  private marqueeStart: { x: number; y: number; mode: "replace" | "add" | "subtract" } | null = null;
+  private marqueeStart: { x: number; y: number; mode: "toggle" | "add" | "subtract" } | null = null;
   private marqueeMoved = false;
+  private blockNextClick = false;
   private marqueeMoveHandler = (event: PointerEvent) => this.onMarqueeMove(event);
   private marqueeUpHandler = (event: PointerEvent) => this.onMarqueeUp(event);
 
@@ -219,7 +220,8 @@ export class VideoLibraryView extends ItemView {
 
   private renderMain(root: HTMLElement): void {
     const main = root.createDiv({ cls: "vl-main" });
-    const toolbar = main.createDiv({ cls: "vl-toolbar" });
+    const header = main.createDiv({ cls: "vl-main-header" });
+    const toolbar = header.createDiv({ cls: "vl-toolbar" });
     const heading = toolbar.createDiv({ cls: "vl-heading" });
     this.headingEl = heading.createEl("h2", { text: this.filterName() });
     this.countEl = heading.createSpan({ cls: "vl-count" });
@@ -276,9 +278,19 @@ export class VideoLibraryView extends ItemView {
     add.createSpan({ text: t("action.add") });
     add.addEventListener("click", () => this.openAdd());
 
-    this.buildSelectionBar(main);
+    this.buildSelectionBar(header);
     this.gridWrap = main.createDiv({ cls: "vl-grid-wrap" });
     this.gridWrap.addEventListener("pointerdown", (event) => this.onGridPointerDown(event));
+    this.gridWrap.addEventListener(
+      "click",
+      (event) => {
+        if (!this.blockNextClick) return;
+        this.blockNextClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      true
+    );
     this.updateNavActive();
   }
 
@@ -290,7 +302,7 @@ export class VideoLibraryView extends ItemView {
   }
 
   private buildSelectionBar(parent: HTMLElement): void {
-    this.selectionBar = parent.createDiv({ cls: "vl-selection-bar is-hidden" });
+    this.selectionBar = parent.createDiv({ cls: "vl-selection-bar" });
     const head = this.selectionBar.createDiv({ cls: "vl-selection-head" });
     this.selectionCountEl = head.createSpan({ cls: "vl-selection-count" });
 
@@ -345,8 +357,18 @@ export class VideoLibraryView extends ItemView {
   private updateSelectionUi(): void {
     if (!this.selectionBar) return;
     const count = this.selectedIds.size;
-    this.selectionBar.toggleClass("is-hidden", count === 0);
+    this.selectionBar.toggleClass("is-empty", count === 0);
     this.selectionCountEl.setText(t("selection.selected", { count }));
+
+    const quick = this.selectionBar.querySelectorAll<HTMLButtonElement>(".vl-selection-quick button");
+    quick.forEach((button, index) => {
+      button.disabled = index < 2 ? this.visibleVideoIds.length === 0 : count === 0;
+    });
+    this.batchCategorySelect.disabled = count === 0;
+    const actionButtons = this.selectionBar.querySelectorAll<HTMLButtonElement>(".vl-selection-actions button");
+    actionButtons.forEach((button) => {
+      button.disabled = count === 0;
+    });
 
     for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
       const id = card.dataset.videoId || "";
@@ -469,44 +491,49 @@ export class VideoLibraryView extends ItemView {
   private onGridPointerDown(event: PointerEvent): void {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement | null;
-    if (target?.closest(".vl-card, button, input, select, a, .vl-empty")) return;
-    event.preventDefault();
+    if (target?.closest("button, input, select, a, .vl-preview-audio")) return;
 
     this.removeMarqueeListeners();
     this.marqueeEl?.remove();
+    this.marqueeEl = null;
     this.marqueeStart = {
       x: event.clientX,
       y: event.clientY,
-      mode: event.ctrlKey || event.metaKey ? "subtract" : event.shiftKey ? "add" : "replace"
+      mode: event.ctrlKey || event.metaKey ? "subtract" : event.shiftKey ? "add" : "toggle"
     };
     this.marqueeMoved = false;
-
-    const marquee = document.createElement("div");
-    marquee.className = "vl-marquee";
-    marquee.style.display = "none";
-    document.body.appendChild(marquee);
-    this.marqueeEl = marquee;
 
     window.addEventListener("pointermove", this.marqueeMoveHandler);
     window.addEventListener("pointerup", this.marqueeUpHandler);
   }
 
   private onMarqueeMove(event: PointerEvent): void {
-    if (!this.marqueeStart || !this.marqueeEl) return;
+    if (!this.marqueeStart) return;
     const dx = event.clientX - this.marqueeStart.x;
     const dy = event.clientY - this.marqueeStart.y;
     if (!this.marqueeMoved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
-    this.marqueeMoved = true;
+
+    if (!this.marqueeMoved) {
+      this.marqueeMoved = true;
+      this.blockNextClick = true;
+      const marquee = document.createElement("div");
+      marquee.className = "vl-marquee";
+      document.body.appendChild(marquee);
+      this.marqueeEl = marquee;
+      this.gridWrap.addClass("is-marquee-active");
+    }
+    event.preventDefault();
 
     const left = Math.min(this.marqueeStart.x, event.clientX);
     const top = Math.min(this.marqueeStart.y, event.clientY);
     const width = Math.abs(dx);
     const height = Math.abs(dy);
-    this.marqueeEl.style.display = "block";
-    this.marqueeEl.style.left = `${left}px`;
-    this.marqueeEl.style.top = `${top}px`;
-    this.marqueeEl.style.width = `${width}px`;
-    this.marqueeEl.style.height = `${height}px`;
+    if (this.marqueeEl) {
+      this.marqueeEl.style.left = `${left}px`;
+      this.marqueeEl.style.top = `${top}px`;
+      this.marqueeEl.style.width = `${width}px`;
+      this.marqueeEl.style.height = `${height}px`;
+    }
 
     const hits = new Set(this.marqueeHits({ left, top, right: left + width, bottom: top + height }));
     for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
@@ -530,21 +557,32 @@ export class VideoLibraryView extends ItemView {
     this.marqueeEl?.remove();
     this.marqueeEl = null;
     this.marqueeStart = null;
-    this.marqueeMoved = false;
+    this.gridWrap.removeClass("is-marquee-active");
 
     for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
       card.removeClass("is-marquee-hit");
     }
 
-    if (mode === "replace") {
-      this.selectedIds = new Set(hits);
-    } else if (mode === "add") {
+    if (!this.marqueeMoved) return;
+    this.marqueeMoved = false;
+    if (mode === "add") {
       for (const id of hits) this.selectedIds.add(id);
-    } else {
+    } else if (mode === "subtract") {
       for (const id of hits) this.selectedIds.delete(id);
+    } else {
+      for (const id of hits) {
+        if (this.selectedIds.has(id)) {
+          this.selectedIds.delete(id);
+        } else {
+          this.selectedIds.add(id);
+        }
+      }
     }
     this.lastSelectedId = hits[hits.length - 1] || null;
     this.updateSelectionUi();
+    window.setTimeout(() => {
+      this.blockNextClick = false;
+    }, 0);
   }
 
   private marqueeHits(rect: { left: number; top: number; right: number; bottom: number }): string[] {
@@ -684,7 +722,7 @@ export class VideoLibraryView extends ItemView {
     if (video.coverPath) {
       const img = cover.createEl("img", {
         cls: "vl-card-image is-hidden",
-        attr: { alt: "", loading: "lazy", decoding: "async" }
+        attr: { alt: "", loading: "lazy", decoding: "async", draggable: "false" }
       });
       void this.plugin.coverStore.getUrl(video.coverPath).then((url) => {
         if (!url) return;

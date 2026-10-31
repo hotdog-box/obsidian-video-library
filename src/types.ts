@@ -8,7 +8,7 @@ export type CardSize = "small" | "medium" | "large";
 
 export type TagMatchMode = "any" | "all";
 
-export const DATA_VERSION = 2;
+export const DATA_VERSION = 3;
 
 export const UNCATEGORIZED_ID = "uncategorized";
 
@@ -17,6 +17,14 @@ export interface Category {
   name: string;
   color: string;
   createdAt: number;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  createdAt: number;
+  sortOrder?: number;
 }
 
 export interface Tag {
@@ -90,6 +98,7 @@ export interface VideoItem {
   author?: string;
   description?: string;
   categoryId: string;
+  folderId?: string | null;
   tags: string[];
   notes?: string;
   coverPath?: string;
@@ -120,6 +129,7 @@ export interface PluginData {
   version: number;
   videos: VideoItem[];
   categories: Category[];
+  folders: Folder[];
   tags: Tag[];
   settings: PluginSettings;
 }
@@ -162,6 +172,7 @@ export function createDefaultData(): PluginData {
     version: DATA_VERSION,
     videos: [],
     categories: [],
+    folders: [],
     tags: [],
     settings: { ...DEFAULT_SETTINGS }
   };

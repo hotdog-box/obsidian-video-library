@@ -7,6 +7,7 @@ import {
   CardSize,
   createDefaultData,
   DATA_VERSION,
+  Folder,
   LanguageSetting,
   PluginData,
   sanitizePreviewConfig,
@@ -28,6 +29,10 @@ export type CategoryMutationResult =
 
 export type TagMutationResult =
   | { ok: true; tag: Tag }
+  | { ok: false; reason: "empty" | "duplicate" };
+
+export type FolderMutationResult =
+  | { ok: true; folder: Folder }
   | { ok: false; reason: "empty" | "duplicate" };
 
 export default class VideoLibraryPlugin extends Plugin {
@@ -101,7 +106,24 @@ export default class VideoLibraryPlugin extends Plugin {
       : [];
 
     const categoryIds = new Set(categories.map((category) => category.id));
-    let tagsMigrated = !Array.isArray(loaded.tags);
+    const folders: Folder[] = Array.isArray(loaded.folders)
+      ? loaded.folders
+          .filter((folder): folder is Folder => Boolean(folder && folder.id && folder.name))
+          .map((folder) => ({
+            id: String(folder.id),
+            name: String(folder.name).trim(),
+            parentId: folder.parentId ? String(folder.parentId) : null,
+            createdAt: Number(folder.createdAt) || Date.now(),
+            sortOrder: Number.isFinite(Number(folder.sortOrder)) ? Number(folder.sortOrder) : undefined
+          }))
+          .filter((folder) => Boolean(folder.name))
+      : [];
+    const folderIds = new Set(folders.map((folder) => folder.id));
+    for (const folder of folders) {
+      if (folder.parentId && !folderIds.has(folder.parentId)) folder.parentId = null;
+    }
+
+    let tagsMigrated = !Array.isArray(loaded.tags) || !Array.isArray(loaded.folders);
     const tags: Tag[] = Array.isArray(loaded.tags)
       ? loaded.tags
           .filter((tag): tag is Tag => Boolean(tag && tag.id && tag.name))
@@ -152,6 +174,7 @@ export default class VideoLibraryPlugin extends Plugin {
               title: video.title || (video.url ? fallbackTitleFromUrl(video.url) : t("form.untitled")),
               categoryId:
                 video.categoryId && categoryIds.has(video.categoryId) ? video.categoryId : UNCATEGORIZED_ID,
+              folderId: video.folderId && folderIds.has(video.folderId) ? video.folderId : undefined,
               tags: normalizedTags,
               preview: sanitizePreviewConfig(video.preview),
               pinned: Boolean(video.pinned),
@@ -177,6 +200,7 @@ export default class VideoLibraryPlugin extends Plugin {
     this.data = {
       version: DATA_VERSION,
       categories,
+      folders,
       videos,
       tags,
       settings
@@ -280,6 +304,119 @@ export default class VideoLibraryPlugin extends Plugin {
     await this.persist();
     this.refreshViews();
     return moved;
+  }
+
+  getFolder(id: string): Folder | undefined {
+    return this.data.folders.find((folder) => folder.id === id);
+  }
+
+  getSubfolders(parentId: string | null): Folder[] {
+    return this.data.folders
+      .filter((folder) => (folder.parentId || null) === parentId)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }
+
+  folderPath(id: string): Folder[] {
+    const path: Folder[] = [];
+    let current = this.getFolder(id);
+    const seen = new Set<string>();
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      path.unshift(current);
+      current = current.parentId ? this.getFolder(current.parentId) : undefined;
+    }
+    return path;
+  }
+
+  folderCount(id: string): number {
+    return this.data.videos.filter((video) => video.folderId === id).length;
+  }
+
+  isFolderWithin(folderId: string, possibleAncestorId: string): boolean {
+    let current = this.getFolder(folderId);
+    const seen = new Set<string>();
+    while (current && !seen.has(current.id)) {
+      if (current.id === possibleAncestorId) return true;
+      seen.add(current.id);
+      current = current.parentId ? this.getFolder(current.parentId) : undefined;
+    }
+    return false;
+  }
+
+  async createFolder(name: string, parentId: string | null): Promise<FolderMutationResult> {
+    const clean = name.trim();
+    if (!clean) return { ok: false, reason: "empty" };
+    const siblings = this.data.folders.filter((folder) => (folder.parentId || null) === parentId);
+    if (siblings.some((folder) => folder.name.toLowerCase() === clean.toLowerCase())) {
+      return { ok: false, reason: "duplicate" };
+    }
+    const folder: Folder = {
+      id: uid("folder"),
+      name: clean,
+      parentId,
+      createdAt: Date.now()
+    };
+    this.data.folders.push(folder);
+    await this.persist();
+    this.refreshViews();
+    return { ok: true, folder };
+  }
+
+  async renameFolder(id: string, name: string): Promise<FolderMutationResult> {
+    const folder = this.getFolder(id);
+    if (!folder) return { ok: false, reason: "empty" };
+    const clean = name.trim();
+    if (!clean) return { ok: false, reason: "empty" };
+    const siblings = this.data.folders.filter(
+      (candidate) => candidate.id !== id && (candidate.parentId || null) === (folder.parentId || null)
+    );
+    if (siblings.some((candidate) => candidate.name.toLowerCase() === clean.toLowerCase())) {
+      return { ok: false, reason: "duplicate" };
+    }
+    folder.name = clean;
+    await this.persist();
+    this.refreshViews();
+    return { ok: true, folder };
+  }
+
+  async deleteFolders(ids: Set<string>): Promise<number> {
+    let deleted = 0;
+    for (const id of [...ids]) {
+      const folder = this.getFolder(id);
+      if (!folder) continue;
+      const parentId = folder.parentId || null;
+      for (const video of this.data.videos) {
+        if (video.folderId === id) video.folderId = parentId || undefined;
+      }
+      for (const child of this.data.folders) {
+        if (child.parentId === id) child.parentId = parentId;
+      }
+      this.data.folders = this.data.folders.filter((candidate) => candidate.id !== id);
+      deleted += 1;
+    }
+    if (deleted > 0) {
+      await this.persist();
+      this.refreshViews();
+    }
+    return deleted;
+  }
+
+  async moveItems(videoIds: Set<string>, folderIds: Set<string>, targetFolderId: string | null): Promise<void> {
+    if (targetFolderId && !this.getFolder(targetFolderId)) return;
+    for (const video of this.data.videos) {
+      if (!videoIds.has(video.id)) continue;
+      video.folderId = targetFolderId || undefined;
+      video.updatedAt = Date.now();
+    }
+    for (const folder of this.data.folders) {
+      if (!folderIds.has(folder.id)) continue;
+      if (targetFolderId && (folder.id === targetFolderId || this.isFolderWithin(targetFolderId, folder.id))) {
+        continue;
+      }
+      folder.parentId = targetFolderId;
+    }
+    await this.persist();
+    this.refreshViews();
   }
 
   getTagByName(name: string): Tag | undefined {

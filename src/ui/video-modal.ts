@@ -61,7 +61,8 @@ export class VideoEditModal extends Modal {
   constructor(
     app: App,
     private plugin: VideoLibraryPlugin,
-    video?: VideoItem | null
+    video?: VideoItem | null,
+    private folderId?: string
   ) {
     super(app);
     this.item = video
@@ -866,6 +867,7 @@ export class VideoEditModal extends Modal {
         author: this.author,
         description: this.item?.description,
         categoryId: this.categorySelect.value || UNCATEGORIZED_ID,
+        folderId: this.item?.folderId || this.folderId,
         tags,
         notes: this.notesInput.value.trim() || undefined,
         coverPath,

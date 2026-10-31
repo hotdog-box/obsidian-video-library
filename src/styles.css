@@ -834,6 +834,119 @@
   opacity: 1;
 }
 
+.vl-folder-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--interactive-accent) 20%, var(--background-secondary)), var(--background-secondary));
+}
+
+.vl-folder-icon {
+  display: flex;
+  color: var(--interactive-accent);
+  opacity: 0.9;
+}
+
+.vl-folder-icon svg {
+  width: 44px;
+  height: 44px;
+  stroke-width: 1.35;
+}
+
+.vl-folder-video-count {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 2px 6px;
+  font-size: 9px;
+  color: #fff;
+  background: rgb(0 0 0 / 42%);
+  border-radius: 20px;
+}
+
+.vl-folder-card .vl-card-title {
+  min-height: 0;
+}
+
+.vl-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  align-items: center;
+  padding: 2px 0 5px;
+}
+
+.vl-crumb {
+  height: 23px;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: transparent !important;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.vl-crumb:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover) !important;
+}
+
+.vl-crumb.is-current {
+  font-weight: 650;
+  color: var(--text-normal);
+}
+
+.vl-crumb-separator {
+  display: flex;
+  color: var(--text-faint);
+}
+
+.vl-crumb-separator svg {
+  width: 12px;
+  height: 12px;
+}
+
+.vl-breadcrumb-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  margin-left: auto;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: transparent !important;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.vl-breadcrumb-add:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover) !important;
+}
+
+.vl-breadcrumb-add svg {
+  width: 13px;
+  height: 13px;
+}
+
+.vl-crumb.is-drop-target,
+.vl-breadcrumb-add.is-drop-target {
+  color: var(--interactive-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 14%, transparent) !important;
+  border-color: var(--interactive-accent);
+}
+
+.vl-card.drop-into {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--interactive-accent) 20%, transparent), 0 8px 22px rgb(0 0 0 / 10%);
+}
+
 .vl-preview-mute {
   display: flex;
   align-items: center;

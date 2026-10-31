@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 — 2026-10-31
+
+- Add folders, including nested folders, with create, rename and delete.
+- Breadcrumb navigation with drag-to-breadcrumb moves.
+- Windows 11 Explorer-style selection: single click selects, double click opens, Ctrl/Shift extend selection.
+- Drag videos and folders onto folder cards to move them, including multi-selection drag.
+- Drag selected items to the breadcrumb to move them up one or more levels.
+- Videos can live inside folders and are hidden from the parent folder view.
+- Deleting a folder moves its videos and subfolders up one level instead of deleting the videos.
+- New videos added while inside a folder are created in that folder.
+- Folder cards show video and subfolder counts.
+- Manual drag sorting continues to work inside each folder.
+
 ## 0.2.1 — 2026-10-31
 
 - Pin videos to a dedicated section at the top.

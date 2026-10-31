@@ -154,6 +154,9 @@ export default class VideoLibraryPlugin extends Plugin {
                 video.categoryId && categoryIds.has(video.categoryId) ? video.categoryId : UNCATEGORIZED_ID,
               tags: normalizedTags,
               preview: sanitizePreviewConfig(video.preview),
+              pinned: Boolean(video.pinned),
+              pinnedAt: Number(video.pinnedAt) || undefined,
+              sortOrder: Number.isFinite(Number(video.sortOrder)) ? Number(video.sortOrder) : undefined,
               createdAt: Number(video.createdAt) || Date.now(),
               updatedAt: Number(video.updatedAt) || Number(video.createdAt) || Date.now()
             } as VideoItem;
@@ -169,6 +172,7 @@ export default class VideoLibraryPlugin extends Plugin {
       ? Math.min(1, Math.max(0, Number(settings.previewVolume)))
       : 0.8;
     settings.tagMatchMode = settings.tagMatchMode === "all" ? "all" : "any";
+    if (typeof settings.pinnedCollapsed !== "boolean") settings.pinnedCollapsed = false;
 
     this.data = {
       version: DATA_VERSION,
@@ -424,6 +428,36 @@ export default class VideoLibraryPlugin extends Plugin {
     target.updatedAt = Date.now();
     await this.persist();
     this.refreshViews();
+  }
+
+  async setPinned(ids: Set<string>, pinned: boolean): Promise<void> {
+    const now = Date.now();
+    for (const video of this.data.videos) {
+      if (!ids.has(video.id)) continue;
+      video.pinned = pinned;
+      video.pinnedAt = pinned ? now : undefined;
+      video.updatedAt = now;
+    }
+    await this.persist();
+    this.refreshViews();
+  }
+
+  async reorderVideos(orderedIds: string[]): Promise<void> {
+    const positions = new Map(orderedIds.map((id, index) => [id, index]));
+    for (const video of this.data.videos) {
+      const position = positions.get(video.id);
+      if (position === undefined) continue;
+      video.sortOrder = position;
+      video.updatedAt = Date.now();
+    }
+    this.data.settings.sort = "manual";
+    await this.persist();
+    this.refreshViews();
+  }
+
+  async setPinnedCollapsed(collapsed: boolean): Promise<void> {
+    this.data.settings.pinnedCollapsed = collapsed;
+    await this.persist();
   }
 
   findDuplicate(url: string, localPath: string | undefined, excludeId?: string): VideoItem | undefined {

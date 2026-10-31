@@ -39,6 +39,7 @@ export class VideoLibraryView extends ItemView {
   private tagFilterChips!: HTMLElement;
   private tagModeButtons = new Map<"any" | "all", HTMLButtonElement>();
   private tagClearButton!: HTMLButtonElement;
+  private draggingId: string | null = null;
   private marqueeEl: HTMLElement | null = null;
   private marqueeStart: { x: number; y: number; mode: "toggle" | "add" | "subtract" } | null = null;
   private marqueeMoved = false;
@@ -272,7 +273,8 @@ export class VideoLibraryView extends ItemView {
       { value: "newest", key: "sort.newest" },
       { value: "oldest", key: "sort.oldest" },
       { value: "title-asc", key: "sort.titleAsc" },
-      { value: "title-desc", key: "sort.titleDesc" }
+      { value: "title-desc", key: "sort.titleDesc" },
+      { value: "manual", key: "sort.manual" }
     ];
     for (const option of sortOptions) {
       sort.createEl("option", { text: t(option.key), value: option.value });
@@ -343,6 +345,8 @@ export class VideoLibraryView extends ItemView {
 
     this.selectionButton(actions, "star", t("selection.favorite"), () => void this.batchFavorite(true));
     this.selectionButton(actions, "star-off", t("selection.unfavorite"), () => void this.batchFavorite(false));
+    this.selectionButton(actions, "pin", t("pin.pinSelected"), () => void this.batchPin(true));
+    this.selectionButton(actions, "pin-off", t("pin.unpinSelected"), () => void this.batchPin(false));
     this.selectionButton(actions, "pencil", t("selection.rename"), () => this.openBatchRename());
     this.selectionButton(actions, "trash-2", t("selection.delete"), () => this.confirmBatchDelete(), "is-danger");
 
@@ -560,6 +564,16 @@ export class VideoLibraryView extends ItemView {
     this.clearSelection();
   }
 
+  private async batchPin(pinned: boolean): Promise<void> {
+    const ids = new Set(this.selectedIds);
+    if (ids.size === 0) return;
+    await this.plugin.setPinned(ids, pinned);
+    new Notice(
+      t(pinned ? "pin.pinnedNotice" : "pin.unpinnedNotice", { count: ids.size })
+    );
+    this.clearSelection();
+  }
+
   private openBatchRename(): void {
     const count = this.selectedIds.size;
     if (count === 0) return;
@@ -714,6 +728,79 @@ export class VideoLibraryView extends ItemView {
     window.removeEventListener("pointerup", this.marqueeUpHandler);
   }
 
+  private onCardDragStart(event: DragEvent, id: string, card: HTMLElement): void {
+    event.stopPropagation();
+    this.draggingId = id;
+    card.addClass("is-dragging");
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", id);
+    }
+  }
+
+  private onCardDragOver(event: DragEvent, video: VideoItem, card: HTMLElement): void {
+    if (!this.draggingId || this.draggingId === video.id) return;
+    const dragged = this.plugin.data.videos.find((candidate) => candidate.id === this.draggingId);
+    if (!dragged || Boolean(dragged.pinned) !== Boolean(video.pinned)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    const rect = card.getBoundingClientRect();
+    const after = event.clientY > rect.top + rect.height / 2;
+    this.clearDropIndicators();
+    card.addClass(after ? "drop-after" : "drop-before");
+  }
+
+  private onCardDragLeave(card: HTMLElement): void {
+    card.removeClass("drop-before", "drop-after");
+  }
+
+  private onCardDrop(event: DragEvent, video: VideoItem, card: HTMLElement): void {
+    event.preventDefault();
+    const draggedId = this.draggingId;
+    const after = card.classList.contains("drop-after");
+    this.clearDragState();
+    if (!draggedId || draggedId === video.id) return;
+    void this.reorderByDrop(draggedId, video.id, after);
+  }
+
+  private async reorderByDrop(draggedId: string, targetId: string, after: boolean): Promise<void> {
+    const dragged = this.plugin.data.videos.find((video) => video.id === draggedId);
+    const target = this.plugin.data.videos.find((video) => video.id === targetId);
+    if (!dragged || !target || Boolean(dragged.pinned) !== Boolean(target.pinned)) return;
+
+    const group = this.plugin.data.videos.filter((video) => Boolean(video.pinned) === Boolean(target.pinned));
+    const mode = this.plugin.data.settings.sort;
+    group.sort((a, b) => {
+      if (mode === "manual") return (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt);
+      if (target.pinned) return (b.pinnedAt || b.createdAt) - (a.pinnedAt || a.createdAt);
+      if (mode === "oldest") return a.createdAt - b.createdAt;
+      if (mode === "title-asc") return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+      if (mode === "title-desc") return b.title.localeCompare(a.title, undefined, { sensitivity: "base" });
+      return b.createdAt - a.createdAt;
+    });
+
+    const from = group.findIndex((video) => video.id === draggedId);
+    if (from < 0) return;
+    group.splice(from, 1);
+    const targetIndex = group.findIndex((video) => video.id === targetId);
+    if (targetIndex < 0) return;
+    group.splice(after ? targetIndex + 1 : targetIndex, 0, dragged);
+    await this.plugin.reorderVideos(group.map((video) => video.id));
+  }
+
+  private clearDropIndicators(): void {
+    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+      card.removeClass("drop-before", "drop-after");
+    }
+  }
+
+  private clearDragState(): void {
+    this.draggingId = null;
+    for (const card of Array.from(this.gridWrap.querySelectorAll(".vl-card")) as HTMLElement[]) {
+      card.removeClass("is-dragging", "drop-before", "drop-after");
+    }
+  }
+
   private filteredVideos(): VideoItem[] {
     const query = this.query.trim().toLowerCase();
     let videos = this.plugin.data.videos.filter((video) => {
@@ -751,6 +838,9 @@ export class VideoLibraryView extends ItemView {
 
     const mode = this.plugin.data.settings.sort;
     videos = [...videos].sort((a, b) => {
+      if (mode === "manual") {
+        return (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt);
+      }
       if (mode === "oldest") return a.createdAt - b.createdAt;
       if (mode === "title-asc") return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
       if (mode === "title-desc") return b.title.localeCompare(a.title, undefined, { sensitivity: "base" });
@@ -762,7 +852,18 @@ export class VideoLibraryView extends ItemView {
   private renderGrid(): void {
     if (!this.gridWrap) return;
     const videos = this.filteredVideos();
-    this.visibleVideoIds = videos.map((video) => video.id);
+    const pinned = videos
+      .filter((video) => video.pinned)
+      .sort((a, b) => {
+        if (this.plugin.data.settings.sort === "manual") {
+          return (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt);
+        }
+        return (b.pinnedAt || b.createdAt) - (a.pinnedAt || a.createdAt);
+      });
+    const regular = videos.filter((video) => !video.pinned);
+    const collapsed = this.plugin.data.settings.pinnedCollapsed;
+    const displayed = collapsed ? regular : [...pinned, ...regular];
+    this.visibleVideoIds = displayed.map((video) => video.id);
     const existing = new Set(this.visibleVideoIds);
     for (const id of [...this.selectedIds]) {
       if (!existing.has(id)) this.selectedIds.delete(id);
@@ -777,11 +878,46 @@ export class VideoLibraryView extends ItemView {
       return;
     }
 
-    const grid = this.gridWrap.createDiv({ cls: "vl-grid" });
-    for (const video of videos) {
-      this.renderCard(grid, video);
+    if (pinned.length > 0) {
+      this.renderPinnedSection(pinned, collapsed);
+    }
+
+    if (regular.length > 0) {
+      const grid = this.gridWrap.createDiv({ cls: "vl-grid" });
+      for (const video of regular) {
+        this.renderCard(grid, video);
+      }
     }
     this.updateSelectionUi();
+  }
+
+  private renderPinnedSection(pinned: VideoItem[], collapsed: boolean): void {
+    const section = this.gridWrap.createDiv({ cls: "vl-pinned-section" });
+    const header = section.createEl("button", {
+      cls: "vl-pinned-header",
+      attr: {
+        type: "button",
+        "aria-expanded": collapsed ? "false" : "true",
+        title: collapsed ? t("pin.expand") : t("pin.collapse")
+      }
+    });
+    const pinIcon = header.createSpan({ cls: "vl-pinned-icon" });
+    setIcon(pinIcon, "pin");
+    header.createSpan({ text: t("pin.pinnedSection"), cls: "vl-pinned-title" });
+    header.createSpan({ text: String(pinned.length), cls: "vl-pinned-count" });
+    const chevron = header.createSpan({ cls: "vl-pinned-chevron" });
+    setIcon(chevron, collapsed ? "chevron-right" : "chevron-down");
+    header.addEventListener("click", () => {
+      void this.plugin.setPinnedCollapsed(!collapsed).then(() => {
+        this.renderGrid();
+      });
+    });
+
+    if (collapsed) return;
+    const grid = section.createDiv({ cls: "vl-grid vl-pinned-grid" });
+    for (const video of pinned) {
+      this.renderCard(grid, video);
+    }
   }
 
   private renderEmpty(): void {
@@ -874,7 +1010,26 @@ export class VideoLibraryView extends ItemView {
       void this.plugin.toggleFavorite(video);
     });
 
+    const pin = cover.createEl("button", {
+      cls: `vl-card-pin ${video.pinned ? "is-pinned" : ""}`,
+      attr: {
+        type: "button",
+        title: video.pinned ? t("pin.unpin") : t("pin.pin"),
+        "aria-label": video.pinned ? t("pin.unpin") : t("pin.pin")
+      }
+    });
+    setIcon(pin, "pin");
+    pin.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void this.plugin.setPinned(new Set([video.id]), !video.pinned);
+    });
+
     const actions = cover.createDiv({ cls: "vl-card-actions" });
+    const dragHandle = iconButton(actions, "grip-vertical", t("pin.drag"), () => {}, "vl-card-action vl-card-drag");
+    dragHandle.draggable = true;
+    dragHandle.setAttribute("draggable", "true");
+    dragHandle.addEventListener("dragstart", (event) => this.onCardDragStart(event, video.id, card));
+    dragHandle.addEventListener("dragend", () => this.clearDragState());
     iconButton(actions, "play", t("action.play"), () => this.openPlayer(video), "vl-card-action");
     iconButton(actions, "pencil", t("action.edit"), () => this.openEdit(video), "vl-card-action");
     if (video.url) {
@@ -886,6 +1041,10 @@ export class VideoLibraryView extends ItemView {
         "vl-card-action"
       );
     }
+
+    card.addEventListener("dragover", (event) => this.onCardDragOver(event, video, card));
+    card.addEventListener("dragleave", () => this.onCardDragLeave(card));
+    card.addEventListener("drop", (event) => this.onCardDrop(event, video, card));
 
     const body = card.createDiv({ cls: "vl-card-body" });
     body.createEl("h3", { text: video.title || t("misc.untitled"), cls: "vl-card-title" });
@@ -967,6 +1126,12 @@ export class VideoLibraryView extends ItemView {
         .setTitle(t("action.edit"))
         .setIcon("pencil")
         .onClick(() => this.openEdit(video))
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle(video.pinned ? t("pin.unpin") : t("pin.pin"))
+        .setIcon("pin")
+        .onClick(() => void this.plugin.setPinned(new Set([video.id]), !video.pinned))
     );
     if (video.provider === "local" || video.provider === "direct") {
       menu.addItem((item) =>

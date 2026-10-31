@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — 2026-10-31
+
+- Pin videos to a dedicated section at the top.
+- Pin/unpin from the card, context menu, or batch action bar.
+- Collapse and expand the pinned section; the collapsed state is remembered.
+- Drag the grip handle to reorder pinned or regular videos.
+- Dragging switches the library to manual order, which is also selectable in the sort dropdown.
+
 ## 0.2.0 — 2026-10-31
 
 - Global tag library shared by all videos, with migration from existing free-text tags.

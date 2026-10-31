@@ -2,7 +2,7 @@ export type Provider = "bilibili" | "youtube" | "vimeo" | "direct" | "web" | "lo
 
 export type LanguageSetting = "auto" | "zh" | "en";
 
-export type SortMode = "newest" | "oldest" | "title-asc" | "title-desc";
+export type SortMode = "newest" | "oldest" | "title-asc" | "title-desc" | "manual";
 
 export type CardSize = "small" | "medium" | "large";
 
@@ -99,6 +99,9 @@ export interface VideoItem {
   epId?: number;
   preview?: PreviewConfig;
   favorite?: boolean;
+  pinned?: boolean;
+  pinnedAt?: number;
+  sortOrder?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -110,6 +113,7 @@ export interface PluginSettings {
   previewMuted: boolean;
   previewVolume: number;
   tagMatchMode: TagMatchMode;
+  pinnedCollapsed: boolean;
 }
 
 export interface PluginData {
@@ -149,7 +153,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   cardSize: "medium",
   previewMuted: true,
   previewVolume: 0.8,
-  tagMatchMode: "any"
+  tagMatchMode: "any",
+  pinnedCollapsed: false
 };
 
 export function createDefaultData(): PluginData {

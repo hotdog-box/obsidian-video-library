@@ -10,7 +10,7 @@ export type ViewMode = "grid" | "list";
 
 export type TagMatchMode = "any" | "all";
 
-export const DATA_VERSION = 3;
+export const DATA_VERSION = 4;
 
 export const UNCATEGORIZED_ID = "uncategorized";
 
@@ -36,6 +36,32 @@ export interface Tag {
   color: string;
   createdAt: number;
 }
+
+export interface Marker {
+  id: string;
+  name: string;
+  color: string;
+  autoProvider?: Provider;
+  metatubeProvider?: string;
+  createdAt: number;
+}
+
+export const DEFAULT_MARKERS: Marker[] = [
+  {
+    id: "marker_bilibili",
+    name: "B站",
+    color: "#fb7299",
+    autoProvider: "bilibili",
+    createdAt: 0
+  },
+  {
+    id: "marker_youtube",
+    name: "YouTube",
+    color: "#ff5c5c",
+    autoProvider: "youtube",
+    createdAt: 0
+  }
+];
 
 export const TAG_COLORS = [
   "#e46b6b",
@@ -103,6 +129,11 @@ export interface VideoItem {
   series?: string;
   performers?: string[];
   description?: string;
+  releaseDate?: string;
+  markers?: string[];
+  externalId?: string;
+  metadataSource?: string;
+  scrapedAt?: number;
   categoryId: string;
   folderId?: string | null;
   tags: string[];
@@ -133,6 +164,9 @@ export interface PluginSettings {
   previewVolume: number;
   tagMatchMode: TagMatchMode;
   pinnedCollapsed: boolean;
+  metatubeUrl: string;
+  metatubeToken: string;
+  scrapeAuto: boolean;
 }
 
 export interface PluginData {
@@ -141,6 +175,7 @@ export interface PluginData {
   categories: Category[];
   folders: Folder[];
   tags: Tag[];
+  markers: Marker[];
   settings: PluginSettings;
 }
 
@@ -175,7 +210,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   previewMuted: true,
   previewVolume: 0.8,
   tagMatchMode: "any",
-  pinnedCollapsed: false
+  pinnedCollapsed: false,
+  metatubeUrl: "",
+  metatubeToken: "",
+  scrapeAuto: false
 };
 
 export function createDefaultData(): PluginData {
@@ -185,6 +223,7 @@ export function createDefaultData(): PluginData {
     categories: [],
     folders: [],
     tags: [],
+    markers: DEFAULT_MARKERS.map((marker) => ({ ...marker, createdAt: Date.now() })),
     settings: { ...DEFAULT_SETTINGS }
   };
 }

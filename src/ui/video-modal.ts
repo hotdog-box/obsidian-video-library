@@ -3,11 +3,12 @@ import { providerName, t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import { fetchVideoMetadata } from "../metadata";
 import { fallbackTitleFromUrl, normalizeUrlInput, parseVideoUrl } from "../providers";
-import type { ParsedVideo, PreviewConfig, VideoItem, VideoMetadata } from "../types";
+import type { Marker, ParsedVideo, PreviewConfig, VideoItem, VideoMetadata } from "../types";
 import { clonePreviewConfig, uid, UNCATEGORIZED_ID } from "../types";
 import { CategoryEditModal } from "./category-modal";
 import { pickVaultFile, TextPromptModal } from "./common";
 import { FramePickerModal } from "./frame-modal";
+import { MarkerManagerModal } from "./marker-modal";
 import { PreviewConfigModal } from "./preview-config-modal";
 
 type SourceMode = "url" | "local";
@@ -31,6 +32,7 @@ export class VideoEditModal extends Modal {
   private parsed: ParsedVideo | null;
   private metadata: VideoMetadata | null = null;
   private titleTouched: boolean;
+  private authorTouched: boolean;
   private author?: string;
   private previewConfig?: PreviewConfig;
   private previewSummaryEl!: HTMLElement;
@@ -42,9 +44,15 @@ export class VideoEditModal extends Modal {
   private localPath?: string;
   private localExternal = false;
   private titleInput!: HTMLInputElement;
+  private authorInput!: HTMLInputElement;
+  private releaseDateInput!: HTMLInputElement;
+  private descriptionInput!: HTMLTextAreaElement;
   private studioInput!: HTMLInputElement;
   private seriesInput!: HTMLInputElement;
   private performersInput!: HTMLInputElement;
+  private markerChipsEl!: HTMLElement;
+  private markerSelect!: HTMLSelectElement;
+  private selectedMarkers: string[] = [];
   private categorySelect!: HTMLSelectElement;
   private tagChipsEl!: HTMLElement;
   private tagSelect!: HTMLSelectElement;
@@ -95,7 +103,9 @@ export class VideoEditModal extends Modal {
     this.localExternal = Boolean(video?.localExternal);
     this.parsed = video?.url ? parseVideoUrl(video.url) : null;
     this.titleTouched = Boolean(video);
+    this.authorTouched = Boolean(video?.author);
     this.author = video?.author;
+    this.selectedMarkers = video?.markers ? [...video.markers] : [];
     this.selectedTags = video ? [...video.tags] : [];
     this.previewConfig = clonePreviewConfig(video?.preview);
     this.coverPath = video?.coverPath;
@@ -377,6 +387,16 @@ export class VideoEditModal extends Modal {
       cls: "vl-text-input",
       attr: { placeholder: t("form.performersPlaceholder"), "data-vl-field": "performers" }
     });
+    const releaseField = credits.createDiv({ cls: "vl-field" });
+    releaseField.createEl("label", { text: t("form.releaseDate"), cls: "vl-field-label" });
+    this.releaseDateInput = releaseField.createEl("input", {
+      type: "text",
+      cls: "vl-text-input",
+      attr: {
+        placeholder: t("form.releaseDatePlaceholder"),
+        "data-vl-field": "release-date"
+      }
+    });
 
     const categoryField = grid.createDiv({ cls: "vl-field" });
     categoryField.createEl("label", { text: t("form.category"), cls: "vl-field-label" });
@@ -397,9 +417,31 @@ export class VideoEditModal extends Modal {
       }).open();
     });
 
+    const authorField = grid.createDiv({ cls: "vl-field" });
+    authorField.createEl("label", { text: t("form.author"), cls: "vl-field-label" });
+    this.authorInput = authorField.createEl("input", {
+      type: "text",
+      cls: "vl-text-input",
+      attr: { placeholder: t("form.authorPlaceholder"), "data-vl-field": "author" }
+    });
+    this.authorInput.addEventListener("input", () => {
+      this.authorTouched = true;
+    });
+
+    const markerField = grid.createDiv({ cls: "vl-field vl-field-wide" });
+    markerField.createEl("label", { text: t("form.markers"), cls: "vl-field-label" });
+    this.buildMarkerPicker(markerField);
+
     const tagsField = grid.createDiv({ cls: "vl-field vl-field-wide" });
     tagsField.createEl("label", { text: t("form.tags"), cls: "vl-field-label" });
     this.buildTagPicker(tagsField);
+
+    const descriptionField = grid.createDiv({ cls: "vl-field vl-field-wide" });
+    descriptionField.createEl("label", { text: t("form.description"), cls: "vl-field-label" });
+    this.descriptionInput = descriptionField.createEl("textarea", {
+      cls: "vl-text-area",
+      attr: { placeholder: t("form.descriptionPlaceholder"), rows: "3", "data-vl-field": "description" }
+    });
 
     const notesField = grid.createDiv({ cls: "vl-field vl-field-wide" });
     notesField.createEl("label", { text: t("form.notes"), cls: "vl-field-label" });
@@ -407,6 +449,92 @@ export class VideoEditModal extends Modal {
       cls: "vl-text-area",
       attr: { placeholder: t("form.notesPlaceholder"), rows: "3", "data-vl-field": "notes" }
     });
+  }
+
+  private buildMarkerPicker(parent: HTMLElement): void {
+    const picker = parent.createDiv({ cls: "vl-tag-picker vl-marker-picker" });
+    this.markerChipsEl = picker.createDiv({ cls: "vl-tag-picker-chips" });
+    const controls = picker.createDiv({ cls: "vl-tag-picker-controls" });
+    this.markerSelect = controls.createEl("select", {
+      cls: "dropdown vl-tag-select",
+      attr: { "aria-label": t("marker.add"), "data-vl-field": "markers-existing" }
+    });
+    this.markerSelect.addEventListener("change", () => {
+      const value = this.markerSelect.value;
+      this.markerSelect.value = "";
+      if (value) this.addMarker(value);
+    });
+    const manage = controls.createEl("button", {
+      cls: "vl-small-button",
+      attr: { type: "button" }
+    });
+    setIcon(manage.createSpan(), "tags");
+    manage.createSpan({ text: t("marker.manage") });
+    manage.addEventListener("click", () => {
+      new MarkerManagerModal(this.app, this.plugin, () => {
+        this.renderMarkerChips();
+        this.renderMarkerSelect();
+      }).open();
+    });
+    this.renderMarkerChips();
+    this.renderMarkerSelect();
+  }
+
+  private addMarker(id: string): void {
+    if (!this.plugin.getMarker(id)) return;
+    if (!this.selectedMarkers.includes(id)) this.selectedMarkers.push(id);
+    this.renderMarkerChips();
+    this.renderMarkerSelect();
+  }
+
+  private removeMarker(id: string): void {
+    this.selectedMarkers = this.selectedMarkers.filter((markerId) => markerId !== id);
+    this.renderMarkerChips();
+    this.renderMarkerSelect();
+  }
+
+  private renderMarkerChips(): void {
+    if (!this.markerChipsEl) return;
+    this.markerChipsEl.empty();
+    if (this.selectedMarkers.length === 0) {
+      this.markerChipsEl.createSpan({ text: t("marker.none"), cls: "vl-tag-picker-empty" });
+      return;
+    }
+    for (const id of this.selectedMarkers) {
+      const marker = this.plugin.getMarker(id);
+      if (!marker) continue;
+      const chip = this.markerChipsEl.createSpan({ cls: "vl-selected-tag vl-marker-chip" });
+      const dot = chip.createSpan({ cls: "vl-tag-dot" });
+      dot.setCssStyles({ backgroundColor: marker.color });
+      chip.createSpan({ text: marker.name });
+      const remove = chip.createEl("button", {
+        cls: "vl-selected-tag-remove",
+        attr: { type: "button", title: t("marker.remove"), "aria-label": t("marker.remove") }
+      });
+      setIcon(remove, "x");
+      remove.addEventListener("click", () => this.removeMarker(id));
+    }
+  }
+
+  private renderMarkerSelect(): void {
+    if (!this.markerSelect) return;
+    this.markerSelect.empty();
+    this.markerSelect.createEl("option", { text: t("marker.add"), value: "", attr: { selected: "true" } });
+    for (const marker of this.plugin.data.markers) {
+      if (this.selectedMarkers.includes(marker.id)) continue;
+      this.markerSelect.createEl("option", { text: marker.name, value: marker.id });
+    }
+  }
+
+  private ensureAutoMarkerSelection(provider: string): void {
+    if (this.item) return;
+    const marker = this.plugin.autoMarkerForProvider(provider as VideoItem["provider"]);
+    if (!marker) return;
+    if (!this.selectedMarkers.includes(marker.id)) {
+      this.selectedMarkers.push(marker.id);
+      this.renderMarkerChips();
+      this.renderMarkerSelect();
+    }
   }
 
   private buildTagPicker(parent: HTMLElement): void {
@@ -617,12 +745,17 @@ export class VideoEditModal extends Modal {
   private populateFields(): void {
     this.urlInput.value = this.item?.url || "";
     this.titleInput.value = this.item?.title || "";
+    this.authorInput.value = this.item?.author || this.author || "";
     this.studioInput.value = this.item?.studio || "";
     this.seriesInput.value = this.item?.series || "";
     this.performersInput.value = (this.item?.performers || []).join("、");
+    this.releaseDateInput.value = this.item?.releaseDate || "";
+    this.descriptionInput.value = this.item?.description || "";
     this.notesInput.value = this.item?.notes || "";
     this.fillCategories(this.item?.categoryId || UNCATEGORIZED_ID);
     this.renderTagChips();
+    this.renderMarkerChips();
+    this.renderMarkerSelect();
     this.updateLocalLabel();
   }
 
@@ -659,6 +792,7 @@ export class VideoEditModal extends Modal {
       this.sourceMode === "local" ? "local" : this.parsed?.provider || (this.urlInput.value.trim() ? "web" : null);
     this.providerBadge.setText(provider ? providerName(provider) : "");
     this.providerBadge.toggleClass("is-hidden", !provider);
+    if (provider) this.ensureAutoMarkerSelection(provider);
   }
 
   private updateLocalLabel(): void {
@@ -749,7 +883,10 @@ export class VideoEditModal extends Modal {
       if (metadata.videoId) this.parsed = { ...this.parsed!, videoId: metadata.videoId };
       if (metadata.canonicalUrl) this.parsed = { ...this.parsed!, canonicalUrl: metadata.canonicalUrl };
       if (metadata.embedUrl) this.parsed = { ...this.parsed!, embedUrl: metadata.embedUrl };
-      if (metadata.author) this.author = metadata.author;
+      if (metadata.author) {
+        this.author = metadata.author;
+        if (!this.authorTouched) this.authorInput.value = metadata.author;
+      }
 
       if (!this.titleTouched && metadata.title) {
         this.titleInput.value = metadata.title;
@@ -1037,14 +1174,19 @@ export class VideoEditModal extends Modal {
         provider: isLocal ? "local" : parsed?.provider || "web",
         videoId: isLocal ? undefined : parsed?.videoId,
         title,
-        author: this.author,
+        author: this.authorInput.value.trim() || undefined,
         studio: this.studioInput.value.trim() || undefined,
         series: this.seriesInput.value.trim() || undefined,
         performers: this.performersInput.value
           .split(/[,，、/;；\n]+/)
           .map((name) => name.trim())
           .filter((name, index, list) => Boolean(name) && list.indexOf(name) === index),
-        description: this.item?.description,
+        description: this.descriptionInput.value.trim() || undefined,
+        releaseDate: this.releaseDateInput.value.trim() || undefined,
+        markers: [...this.selectedMarkers],
+        externalId: this.item?.externalId,
+        metadataSource: this.item?.metadataSource,
+        scrapedAt: this.item?.scrapedAt,
         categoryId: this.categorySelect.value || UNCATEGORIZED_ID,
         folderId: this.item?.folderId || this.folderId,
         tags,

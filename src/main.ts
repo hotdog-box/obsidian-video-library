@@ -7,9 +7,12 @@ import {
   CardSize,
   createDefaultData,
   DATA_VERSION,
+  DEFAULT_MARKERS,
   Folder,
   LanguageSetting,
+  Marker,
   PluginData,
+  Provider,
   sanitizePreviewConfig,
   SortMode,
   Tag,
@@ -20,6 +23,14 @@ import {
   VideoItem,
   ViewMode
 } from "./types";
+import {
+  DEFAULT_SCRAPE_FIELDS,
+  MetaTubeClient,
+  MetaTubeMovie,
+  normalizeDate,
+  scrapeQueries,
+  ScrapeFieldOptions
+} from "./scraping";
 import { VideoLibraryView, VIEW_TYPE } from "./ui/library-view";
 import { VideoEditModal } from "./ui/video-modal";
 import { VideoLibrarySettingTab } from "./ui/settings-tab";
@@ -218,6 +229,26 @@ export default class VideoLibraryPlugin extends Plugin {
       return tag;
     };
 
+    let markersMigrated = !Array.isArray(loaded.markers);
+    const markers: Marker[] = markersMigrated
+      ? DEFAULT_MARKERS.map((marker) => ({ ...marker, createdAt: Date.now() }))
+      : (loaded.markers || [])
+          .filter((marker): marker is Marker => Boolean(marker && marker.id && marker.name))
+          .map((marker) => ({
+            id: String(marker.id),
+            name: String(marker.name).trim(),
+            color: String(marker.color || TAG_COLORS[0]),
+            autoProvider: marker.autoProvider ? (String(marker.autoProvider) as Provider) : undefined,
+            metatubeProvider: marker.metatubeProvider
+              ? String(marker.metatubeProvider).trim() || undefined
+              : undefined,
+            createdAt: Number(marker.createdAt) || Date.now()
+          }))
+          .filter((marker) => Boolean(marker.name));
+    const markerIds = new Set(markers.map((marker) => marker.id));
+    const autoMarkerFor = (provider: Provider): string | undefined =>
+      markers.find((marker) => marker.autoProvider === provider)?.id;
+
     const videos = Array.isArray(loaded.videos)
       ? loaded.videos
           .filter((video): video is VideoItem => Boolean(video && (video.url || video.localPath)))
@@ -232,6 +263,13 @@ export default class VideoLibraryPlugin extends Plugin {
                   normalizedTags.push(tag.name);
                 }
               }
+            }
+            const videoMarkers = Array.isArray(video.markers)
+              ? video.markers.map((id) => String(id)).filter((id) => markerIds.has(id))
+              : [];
+            if (!Array.isArray(video.markers)) {
+              const auto = autoMarkerFor(provider);
+              if (auto) videoMarkers.push(auto);
             }
             const rawPerformers = (video as { performers?: unknown }).performers;
             const performers = (Array.isArray(rawPerformers)
@@ -249,6 +287,13 @@ export default class VideoLibraryPlugin extends Plugin {
               studio: video.studio ? String(video.studio).trim() || undefined : undefined,
               series: video.series ? String(video.series).trim() || undefined : undefined,
               performers,
+              markers: videoMarkers,
+              releaseDate: video.releaseDate ? String(video.releaseDate).trim() || undefined : undefined,
+              externalId: video.externalId ? String(video.externalId).trim() || undefined : undefined,
+              metadataSource: video.metadataSource
+                ? String(video.metadataSource).trim() || undefined
+                : undefined,
+              scrapedAt: Number(video.scrapedAt) || undefined,
               localExternal: Boolean(video.localExternal),
               title: video.title || (video.url ? fallbackTitleFromUrl(video.url) : t("form.untitled")),
               categoryId:
@@ -277,6 +322,10 @@ export default class VideoLibraryPlugin extends Plugin {
     settings.tagMatchMode = settings.tagMatchMode === "all" ? "all" : "any";
     settings.viewMode = settings.viewMode === "list" ? "list" : "grid";
     if (typeof settings.pinnedCollapsed !== "boolean") settings.pinnedCollapsed = false;
+    settings.metatubeUrl = typeof settings.metatubeUrl === "string" ? settings.metatubeUrl.trim() : "";
+    settings.metatubeToken = typeof settings.metatubeToken === "string" ? settings.metatubeToken.trim() : "";
+    settings.scrapeAuto = Boolean(settings.scrapeAuto);
+    if (markersMigrated) tagsMigrated = true;
 
     this.data = {
       version: DATA_VERSION,
@@ -284,6 +333,7 @@ export default class VideoLibraryPlugin extends Plugin {
       folders,
       videos,
       tags,
+      markers,
       settings
     };
 
@@ -700,11 +750,173 @@ export default class VideoLibraryPlugin extends Plugin {
     await this.persist();
   }
 
+  getMarker(id: string): Marker | undefined {
+    return this.data.markers.find((marker) => marker.id === id);
+  }
+
+  markerName(id: string): string {
+    return this.getMarker(id)?.name || id;
+  }
+
+  markersForVideo(video: VideoItem): Marker[] {
+    return (video.markers || [])
+      .map((id) => this.getMarker(id))
+      .filter((marker): marker is Marker => Boolean(marker));
+  }
+
+  autoMarkerForProvider(provider: Provider): Marker | undefined {
+    return this.data.markers.find((marker) => marker.autoProvider === provider);
+  }
+
+  private ensureAutoMarker(video: VideoItem): void {
+    if (video.provider === "local") return;
+    const marker = this.autoMarkerForProvider(video.provider);
+    if (!marker) return;
+    const current = video.markers || [];
+    if (!current.includes(marker.id)) video.markers = [...current, marker.id];
+  }
+
+  async saveMarker(marker: Marker): Promise<void> {
+    const clean = marker.name.trim();
+    if (!clean) return;
+    const existing = this.data.markers.find((candidate) => candidate.id === marker.id);
+    const duplicate = this.data.markers.find(
+      (candidate) => candidate.id !== marker.id && candidate.name.toLowerCase() === clean.toLowerCase()
+    );
+    if (duplicate) return;
+    const next: Marker = {
+      ...marker,
+      name: clean,
+      color: marker.color || TAG_COLORS[0],
+      metatubeProvider: marker.metatubeProvider?.trim().toLowerCase() || undefined,
+      createdAt: existing?.createdAt || marker.createdAt || Date.now()
+    };
+    if (existing) {
+      Object.assign(existing, next);
+    } else {
+      this.data.markers.push(next);
+    }
+    await this.persist();
+    this.refreshViews();
+  }
+
+  async deleteMarker(id: string): Promise<void> {
+    this.data.markers = this.data.markers.filter((marker) => marker.id !== id);
+    for (const video of this.data.videos) {
+      if (!video.markers?.includes(id)) continue;
+      video.markers = video.markers.filter((markerId) => markerId !== id);
+      video.updatedAt = Date.now();
+    }
+    await this.persist();
+    this.refreshViews();
+  }
+
+  metaTubeClient(): MetaTubeClient {
+    return new MetaTubeClient({
+      url: this.data.settings.metatubeUrl,
+      token: this.data.settings.metatubeToken
+    });
+  }
+
+  async testMetaTube(): Promise<{ ok: boolean; count?: number; error?: string }> {
+    const client = this.metaTubeClient();
+    if (!client.configured) return { ok: false, error: t("scrape.notConfigured") };
+    try {
+      const providers = await client.providers();
+      return { ok: true, count: Object.keys(providers).length };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  async applyMetaTubeMovie(
+    video: VideoItem,
+    movie: MetaTubeMovie,
+    options: ScrapeFieldOptions = DEFAULT_SCRAPE_FIELDS
+  ): Promise<VideoItem> {
+    const updated: VideoItem = {
+      ...video,
+      tags: [...video.tags],
+      performers: video.performers ? [...video.performers] : [],
+      markers: video.markers ? [...video.markers] : []
+    };
+
+    if (options.cover && movie.cover_url) {
+      try {
+        const base = this.data.settings.metatubeUrl.replace(/\/+$/, "");
+        const coverUrl = /^https?:\/\//i.test(movie.cover_url)
+          ? movie.cover_url
+          : `${base}${movie.cover_url.startsWith("/") ? "" : "/"}${movie.cover_url}`;
+        const image = await this.coverStore.fetchImage(coverUrl, movie.homepage);
+        const previous = updated.coverPath;
+        updated.coverPath = await this.coverStore.saveBuffer(image.buffer, image.extension);
+        if (previous && previous !== updated.coverPath) await this.coverStore.delete(previous);
+      } catch {
+        // A cover failure should not block the metadata update.
+      }
+    }
+
+    if (options.title && movie.title) updated.title = movie.title;
+    if (options.author && movie.director) updated.author = movie.director;
+    if (options.studio) updated.studio = movie.maker || movie.label || updated.studio;
+    if (options.series) updated.series = movie.series || updated.series;
+    if (options.performers && movie.actors && movie.actors.length > 0) {
+      updated.performers = [...movie.actors];
+    }
+    if (options.tags && movie.genres && movie.genres.length > 0) {
+      updated.tags = await this.ensureTags([...updated.tags, ...movie.genres]);
+    }
+    if (options.description && movie.summary) updated.description = movie.summary;
+    if (options.releaseDate && movie.release_date) {
+      updated.releaseDate = normalizeDate(movie.release_date) || updated.releaseDate;
+    }
+    if (options.duration && movie.runtime && movie.runtime > 0) {
+      updated.duration = movie.runtime <= 600 ? movie.runtime * 60 : movie.runtime;
+    }
+    updated.externalId = movie.id;
+    updated.metadataSource = `metatube:${movie.provider}`;
+    updated.scrapedAt = Date.now();
+    updated.updatedAt = Date.now();
+    await this.updateVideo(updated);
+    return updated;
+  }
+
+  async autoScrapeVideo(videoId: string): Promise<void> {
+    if (!this.data.settings.scrapeAuto) return;
+    const video = this.data.videos.find((candidate) => candidate.id === videoId);
+    if (!video) return;
+    const client = this.metaTubeClient();
+    if (!client.configured) return;
+    const marker = this.markersForVideo(video).find((candidate) => candidate.metatubeProvider);
+    if (!marker?.metatubeProvider) return;
+    try {
+      for (const query of scrapeQueries(video)) {
+        const results = await client.search(query, marker.metatubeProvider);
+        if (results.length === 0) continue;
+        if (results.length > 1) {
+          new Notice(t("scrape.multipleCandidates", { count: results.length }));
+          return;
+        }
+        const movie = await client.movie(results[0].provider, results[0].id);
+        await this.applyMetaTubeMovie(video, movie);
+        new Notice(t("scrape.autoApplied", { title: video.title }));
+        return;
+      }
+      new Notice(t("scrape.noResults"));
+    } catch (error) {
+      console.warn("[video-library] Auto scrape failed", error);
+    }
+  }
+
   async addVideo(video: VideoItem): Promise<void> {
+    this.ensureAutoMarker(video);
     await this.ensureExternalLink(video);
     this.data.videos.unshift(video);
     await this.persist();
     this.refreshViews();
+    if (video.provider !== "local") {
+      window.setTimeout(() => void this.autoScrapeVideo(video.id), 1200);
+    }
   }
 
   async importExternalFiles(

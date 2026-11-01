@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 — 2026-11-01
+
+- Add a marker system for scraping: user-defined markers can bind videos to a MetaTube provider, and Bilibili/YouTube links receive automatic markers.
+- Add optional MetaTube integration. Run MetaTube locally and set its URL (and optional token) in settings; the plugin calls its REST API and does not bundle MetaTube code.
+- Add a manual “Scrape metadata” flow in the player and video context menu: search, choose a candidate, review the field diff, and apply cover, author, studio, series, performers, tags, description, release date and duration.
+- Add marker management and four new editable fields: author, release date, description and markers. The video edit form also shows and manages markers.
+- Add an optional auto-scrape setting. It is off by default and only applies metadata when exactly one candidate is found.
+- Auto-scraped metadata never overwrites notes and only merges tags.
+- Keep the 0.7.0 player, cover and folder features unchanged.
+
 ## 0.7.0 — 2026-11-01
 
 - Add Studio/label, Series and Performers fields to the add/edit dialog and persist them with each video.

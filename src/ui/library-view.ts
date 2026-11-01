@@ -11,6 +11,7 @@ import { CategoryEditModal, CategoryManagerModal } from "./category-modal";
 import { VideoEditModal } from "./video-modal";
 import { VideoPlayerModal } from "./player-modal";
 import { PreviewConfigModal } from "./preview-config-modal";
+import { ScrapeModal } from "./scrape-modal";
 import { FolderCoverModal } from "./folder-cover-modal";
 import { MoveToFolderModal } from "./move-modal";
 
@@ -1700,6 +1701,7 @@ export class VideoLibraryView extends ItemView {
         video.url,
         video.notes,
         video.tags.join(" "),
+        this.plugin.markersForVideo(video).map((marker) => marker.name).join(" "),
         this.plugin.categoryName(video.categoryId)
       ]
         .filter(Boolean)
@@ -2465,6 +2467,18 @@ export class VideoLibraryView extends ItemView {
           .setTitle(t("preview.configure"))
           .setIcon("sliders-horizontal")
           .onClick(() => this.openPreviewConfig(video))
+      );
+    }
+    if (!multi) {
+      menu.addItem((item) =>
+        item
+          .setTitle(t("scrape.button"))
+          .setIcon("search")
+          .onClick(() => {
+            new ScrapeModal(this.app, this.plugin, video, () => {
+              this.plugin.refreshViews();
+            }).open();
+          })
       );
     }
     if (video.url) {

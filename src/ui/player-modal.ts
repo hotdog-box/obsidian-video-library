@@ -4,6 +4,7 @@ import type VideoLibraryPlugin from "../main";
 import { buildEmbedUrl, parseVideoUrl } from "../providers";
 import type { PreviewClip, VideoItem } from "../types";
 import { ConfirmModal, formatDate, formatFileSize, openExternal } from "./common";
+import { ScrapeModal } from "./scrape-modal";
 import { VideoEditModal } from "./video-modal";
 
 function formatClock(seconds: number): string {
@@ -141,7 +142,22 @@ export class VideoPlayerModal extends Modal {
       }
     }
 
-    const quick = header.createEl("button", {
+    const actions = header.createDiv({ cls: "vl-player-details-actions" });
+    const scrape = actions.createEl("button", {
+      cls: "vl-player-quick-edit",
+      attr: { type: "button" }
+    });
+    setIcon(scrape.createSpan({ cls: "vl-btn-icon" }), "search");
+    scrape.createSpan({ text: t("scrape.button") });
+    scrape.addEventListener("click", () => {
+      new ScrapeModal(this.app, this.plugin, this.item, (updated) => {
+        Object.assign(this.item, updated);
+        this.titleEl.setText(this.item.title || t("misc.untitled"));
+        this.renderDetails();
+      }).open();
+    });
+
+    const quick = actions.createEl("button", {
       cls: "vl-player-quick-edit",
       attr: { type: "button" }
     });
@@ -174,7 +190,23 @@ export class VideoPlayerModal extends Modal {
       this.item.performers && this.item.performers.length > 0 ? this.item.performers.join(" / ") : "—"
     );
     this.infoRow(grid, t("form.author"), this.item.author || "—");
+    this.infoRow(grid, t("form.releaseDate"), this.item.releaseDate || "—");
     this.infoRow(grid, t("player.added"), formatDate(this.item.createdAt));
+
+    const markersRow = container.createDiv({ cls: "vl-player-info-row vl-player-info-wide" });
+    markersRow.createSpan({ cls: "vl-player-info-label", text: t("form.markers") });
+    const markersValue = markersRow.createSpan({ cls: "vl-player-info-value vl-player-info-tags" });
+    const markers = this.plugin.markersForVideo(this.item);
+    if (markers.length === 0) {
+      markersValue.setText("—");
+    } else {
+      for (const marker of markers) {
+        const chip = markersValue.createSpan({ cls: "vl-tag vl-marker-chip" });
+        const dot = chip.createSpan({ cls: "vl-tag-dot" });
+        dot.setCssStyles({ backgroundColor: marker.color });
+        chip.createSpan({ text: marker.name });
+      }
+    }
 
     const tagsRow = container.createDiv({ cls: "vl-player-info-row vl-player-info-wide" });
     tagsRow.createSpan({ cls: "vl-player-info-label", text: t("form.tags") });
@@ -186,6 +218,13 @@ export class VideoPlayerModal extends Modal {
         tagsValue.createSpan({ text: `#${tag}`, cls: "vl-tag" });
       }
     }
+
+    const descriptionRow = container.createDiv({ cls: "vl-player-info-row vl-player-info-wide" });
+    descriptionRow.createSpan({ cls: "vl-player-info-label", text: t("form.description") });
+    const descriptionValue = descriptionRow.createSpan({
+      cls: "vl-player-info-value vl-player-info-notes"
+    });
+    descriptionValue.setText(this.item.description || "—");
 
     const notesRow = container.createDiv({ cls: "vl-player-info-row vl-player-info-wide" });
     notesRow.createSpan({ cls: "vl-player-info-label", text: t("form.notes") });

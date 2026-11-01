@@ -13,6 +13,7 @@ Video Library is a desktop-only Obsidian plugin for collecting, organizing and w
 - The player has a custom timeline with hover frame thumbnails and hover-preview clip markers, so preview clips become one-click jump points.
 - Videos can store studio/label, series and performers. The player shows duration, file size, credits, tags and notes, with inline tag/notes editing.
 - Batch and folder imports capture a random frame for every imported video as its cover.
+- Optional MetaTube scraping: define markers per source, auto-mark Bilibili/YouTube links, search MetaTube manually, and apply cover, credits, tags, description, release date and duration. The plugin calls a local MetaTube server over HTTP and does not bundle its code.
 - Organize with nested folders, a collapsible folder tree, breadcrumbs, tags with Any/All filtering, favorites, pinned videos, manual drag ordering and custom categories.
 - Switch between a cover grid and a compact list, set custom folder covers, and delete a folder together with its contents when you confirm it.
 - Windows Explorer-style selection: single-click selects, double-click opens, Ctrl/Cmd toggles, Shift extends, and dragging selected items moves them.
@@ -25,7 +26,7 @@ See the Chinese sections below for the complete feature list and usage notes.
 
 ---
 
-> 当前版本：`0.7.0`
+> 当前版本：`0.8.0`
 > 已在 Obsidian `1.14.5`（Windows 桌面版）实际测试通过。
 > 插件类型：仅桌面端。
 
@@ -87,7 +88,10 @@ See the Chinese sections below for the complete feature list and usage notes.
   - 按添加时间、标题或手动顺序排序
   - 分类支持右键重命名/删除，侧边栏拖动可排序
   - 列表和首页空白处右键可直接添加视频；列表空白处还可新建文件夹
-  - 编辑视频时可填写厂商/片商、系列和演出人员，多个演出人员用逗号或“、”分隔
+  - 编辑视频时可填写作者、厂商/片商、系列、演出人员、上架时间、简介和标记，多个演出人员用逗号或“、”分隔
+  - 标记体系：B站/YouTube 链接自动打标记，本地视频可手动选择 JavBus、DMM 等来源标记
+  - 可选 MetaTube 刮削：播放页或右键打开“刮削信息”，搜索候选并勾选要写入的封面、作者、厂商、系列、演出人员、标签、简介、上架时间和时长
+  - 自动刮削默认关闭；开启后只在恰好一个候选时自动写入，避免错配
   - 内置播放器带完整进度条、缓冲进度、音量、全屏和播放/暂停控制；本地文件时长异常时进度条仍可拖动
   - 播放页视频下方显示时长、视频大小、分类、厂商、系列、演出人员、作者、添加时间、标签和备注
   - 播放页提供“修改标签和备注”按钮，可在不离开播放页的情况下直接编辑并同步
@@ -100,6 +104,66 @@ See the Chinese sections below for the complete feature list and usage notes.
 - **数据持久化**
   - 视频、分类、文件夹、标签、设置保存在插件的 `data.json`
   - 封面保存在插件目录的 `covers/` 下，可随插件目录一起备份
+
+---
+
+## 信息刮削（可选）
+
+0.8.0 增加了基于 [MetaTube](https://github.com/metatube-community/metatube-sdk-go) 的可选刮削能力。插件只通过 HTTP 调用本地 MetaTube 服务，**不打包 MetaTube 代码**，因此本项目仍保持 MIT 协议。
+
+### 1. 运行 MetaTube
+
+在本地或 NAS 运行 MetaTube 服务，默认地址通常是：
+
+```text
+http://127.0.0.1:8080
+```
+
+如果服务开启了鉴权，准备好 Bearer Token。
+
+### 2. 在插件设置中连接
+
+打开“设置 → 视频库 → 信息刮削”：
+
+- 填写 `MetaTube 服务地址`
+- 需要时填写 `MetaTube Token`
+- 点“测试 MetaTube 连接”，确认能读到来源数量
+
+### 3. 创建标记
+
+标记（Marker）决定视频去哪个来源刮削：
+
+- “B站”“YouTube”是内置自动标记，添加对应链接时会自动打上。
+- 例如新建“JavBus”标记，把 `MetaTube 来源` 填成 `javbus`。
+- 在编辑视频时选择标记；也可以从“管理标记”里新建、改色、改来源或删除。
+
+MetaTube 的来源名称以服务实际返回为准。常见来源包括 `javbus`、`jav321`、`javfree`、`mgstage`、`sod`、`fanza`、`fc2` 等。**JavDB、MissAV 是否可用取决于你的 MetaTube 版本和来源插件**；当前 MetaTube 公共 provider 列表中没有这两个名字，需要单独适配或使用其他来源。
+
+### 4. 手动刮削
+
+在播放页点“刮削信息”，或在视频上右键“刮削信息”：
+
+1. 按番号或标题搜索；
+2. 从候选结果中选择正确的一部；
+3. 勾选要写入的字段；
+4. 写入视频。
+
+可写入：封面、标题、作者、厂商/片商、系列、演出人员、标签、简介、上架时间、时长。标签采用合并方式，备注永远不会被覆盖。
+
+### 5. 自动刮削（默认关闭）
+
+设置中打开“添加链接后自动刮削”后：
+
+- 只对带有 **MetaTube 来源标记** 的视频生效；
+- 只有搜索结果**恰好一个**时才写入，避免匹配错影片；
+- 多候选时不会自动选择，会提示你手动刮削。
+
+B站/YouTube 链接目前只自动获取标题、作者、封面、时长并自动打标记；没有 Cookie 或 API Key 时，不做站内搜索。JAV 类站点建议使用 MetaTube 后端。
+
+### 协议说明
+
+- MetaTube 采用 Apache-2.0；本项目只调用其 HTTP API，不复制其源代码。
+- [MDCz](https://github.com/ShotHeadman/MDCz) 采用 GPLv3；本项目没有复制或链接其代码，只参考了产品流程并独立实现。
 
 ---
 

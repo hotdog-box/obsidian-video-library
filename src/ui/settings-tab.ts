@@ -3,7 +3,7 @@ import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { CardSize, LanguageSetting, Marker } from "../types";
 import { ConfirmModal } from "./common";
-import { MarkerEditModal, MarkerManagerModal } from "./marker-modal";
+import { MarkerEditModal } from "./marker-modal";
 
 export class VideoLibrarySettingTab extends PluginSettingTab {
   constructor(app: App, private plugin: VideoLibraryPlugin) {
@@ -43,6 +43,15 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
                 medium: t("settings.medium"),
                 large: t("settings.large")
               }
+            }
+          },
+          {
+            name: t("settings.related"),
+            desc: t("settings.relatedDesc"),
+            control: {
+              type: "toggle",
+              key: "relatedEnabled",
+              defaultValue: true
             }
           },
           {
@@ -168,13 +177,6 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
             }
           },
           {
-            name: t("marker.manage"),
-            desc: t("marker.manageDesc"),
-            action: () => {
-              new MarkerManagerModal(this.app, this.plugin, () => this.update()).open();
-            }
-          },
-          {
             name: t("scrape.testConnection"),
             desc: t("scrape.testConnectionDesc"),
             action: () => {
@@ -211,6 +213,31 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     const add = footer.createEl("button", { text: t("scrape.addSite"), attr: { type: "button" } });
     add.addEventListener("click", () => {
       new MarkerEditModal(this.app, this.plugin, null, () => this.update(), "site").open();
+    });
+    const importSites = footer.createEl("button", {
+      text: t("scrape.importSites"),
+      attr: { type: "button" }
+    });
+    importSites.addEventListener("click", () => {
+      const input = document.body.createEl("input", {
+        attr: { type: "file", accept: ".json,application/json" }
+      });
+      input.setCssStyles({ display: "none" });
+      input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        input.remove();
+        if (!file) return;
+        void file
+          .text()
+          .then((text) => JSON.parse(text) as unknown)
+          .then((payload) => this.plugin.importScrapeSites(payload))
+          .then((count) => {
+            new Notice(t("scrape.importedSites", { count }));
+            this.update();
+          })
+          .catch(() => new Notice(t("scrape.importFailed")));
+      });
+      input.click();
     });
     const testAll = footer.createEl("button", {
       text: t("scrape.testEnabledSites"),
@@ -337,6 +364,7 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     if (key === "metatubeToken") return this.plugin.data.settings.metatubeToken;
     if (key === "metatubeServerPath") return this.plugin.data.settings.metatubeServerPath;
     if (key === "scrapeAuto") return this.plugin.data.settings.scrapeAuto;
+    if (key === "relatedEnabled") return this.plugin.data.settings.relatedEnabled;
     return undefined;
   }
 
@@ -361,6 +389,10 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     } else if (key === "scrapeAuto") {
       this.plugin.data.settings.scrapeAuto = Boolean(value);
       await this.plugin.persist();
+    } else if (key === "relatedEnabled") {
+      this.plugin.data.settings.relatedEnabled = Boolean(value);
+      await this.plugin.persist();
+      this.plugin.refreshViews();
     }
   }
 }

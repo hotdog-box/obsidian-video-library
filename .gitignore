@@ -9,6 +9,7 @@ node_modules/
 /covers/
 /external-links/
 /screenshots/
+/刮削站点导入代码/
 tests/.tmp/
 *.log
 .DS_Store

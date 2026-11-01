@@ -8,7 +8,6 @@ import {
   createDefaultData,
   DATA_VERSION,
   DEFAULT_MARKERS,
-  DEFAULT_SCRAPE_SITES,
   Folder,
   LanguageSetting,
   Marker,
@@ -141,6 +140,7 @@ export default class VideoLibraryPlugin extends Plugin {
   data: PluginData = createDefaultData();
   coverStore!: CoverStore;
   private metaTubeProcess: ChildProcessLike | null = null;
+  private undoStack: PluginData[] = [];
   private coverQueue: string[] = [];
   private coverQueueSet = new Set<string>();
   private coverQueueRunning = false;
@@ -171,6 +171,14 @@ export default class VideoLibraryPlugin extends Plugin {
       name: t("action.addVideo"),
       callback: () => {
         new VideoEditModal(this.app, this).open();
+      }
+    });
+
+    this.addCommand({
+      id: "undo",
+      name: t("action.undo"),
+      callback: () => {
+        void this.undo();
       }
     });
 
@@ -258,10 +266,9 @@ export default class VideoLibraryPlugin extends Plugin {
       return tag;
     };
 
-    const needsSiteSeed = Number(loaded.version || 0) < 5;
-    let markersMigrated = !Array.isArray(loaded.markers) || needsSiteSeed;
+    let markersMigrated = !Array.isArray(loaded.markers);
     const markers: Marker[] = !Array.isArray(loaded.markers)
-      ? [...DEFAULT_MARKERS, ...DEFAULT_SCRAPE_SITES].map((marker) => ({
+      ? DEFAULT_MARKERS.map((marker) => ({
           ...marker,
           createdAt: Date.now()
         }))
@@ -299,12 +306,6 @@ export default class VideoLibraryPlugin extends Plugin {
           })
           .filter((marker) => Boolean(marker.name));
 
-    if (needsSiteSeed) {
-      for (const site of DEFAULT_SCRAPE_SITES) {
-        if (markers.some((marker) => marker.id === site.id)) continue;
-        markers.push({ ...site, createdAt: Date.now() });
-      }
-    }
     markers.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     markers.forEach((marker, index) => {
       marker.sortOrder = index;
@@ -391,6 +392,7 @@ export default class VideoLibraryPlugin extends Plugin {
     settings.metatubeServerPath =
       typeof settings.metatubeServerPath === "string" ? settings.metatubeServerPath.trim() : "";
     settings.scrapeAuto = Boolean(settings.scrapeAuto);
+    if (typeof settings.relatedEnabled !== "boolean") settings.relatedEnabled = true;
     if (markersMigrated) tagsMigrated = true;
 
     this.data = {
@@ -415,6 +417,28 @@ export default class VideoLibraryPlugin extends Plugin {
 
   async persist(): Promise<void> {
     await this.saveData(this.data);
+  }
+
+  canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
+
+  private recordUndo(): void {
+    this.undoStack.push(JSON.parse(JSON.stringify(this.data)) as PluginData);
+    if (this.undoStack.length > 30) this.undoStack.shift();
+  }
+
+  async undo(): Promise<boolean> {
+    const snapshot = this.undoStack.pop();
+    if (!snapshot) {
+      new Notice(t("notice.nothingToUndo"));
+      return false;
+    }
+    this.data = snapshot;
+    await this.persist();
+    this.refreshViews();
+    new Notice(t("notice.undone"));
+    return true;
   }
 
   refreshViews(): void {
@@ -464,6 +488,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async createCategory(name: string, color: string): Promise<CategoryMutationResult> {
+    this.recordUndo();
     const clean = name.trim();
     if (!clean) return { ok: false, reason: "empty" };
     if (this.data.categories.some((category) => category.name.toLowerCase() === clean.toLowerCase())) {
@@ -482,6 +507,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async renameCategory(id: string, name: string): Promise<CategoryMutationResult> {
+    this.recordUndo();
     const category = this.getCategory(id);
     if (!category) return { ok: false, reason: "empty" };
     const clean = name.trim();
@@ -500,6 +526,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async deleteCategory(id: string): Promise<number> {
+    this.recordUndo();
     const index = this.data.categories.findIndex((category) => category.id === id);
     if (index < 0) return 0;
     let moved = 0;
@@ -517,6 +544,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async reorderCategories(orderedIds: string[]): Promise<void> {
+    this.recordUndo();
     const positions = new Map(orderedIds.map((id, index) => [id, index]));
     this.data.categories.sort((a, b) => {
       const aPos = positions.get(a.id) ?? Number.MAX_SAFE_INTEGER;
@@ -565,6 +593,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async createFolder(name: string, parentId: string | null): Promise<FolderMutationResult> {
+    this.recordUndo();
     const clean = name.trim();
     if (!clean) return { ok: false, reason: "empty" };
     const siblings = this.data.folders.filter((folder) => (folder.parentId || null) === parentId);
@@ -584,6 +613,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async renameFolder(id: string, name: string): Promise<FolderMutationResult> {
+    this.recordUndo();
     const folder = this.getFolder(id);
     if (!folder) return { ok: false, reason: "empty" };
     const clean = name.trim();
@@ -623,6 +653,7 @@ export default class VideoLibraryPlugin extends Plugin {
     ids: Set<string>,
     deleteLocalFiles = false
   ): Promise<{ folders: number; videos: number }> {
+    this.recordUndo();
     const allIds = this.descendantFolderIds(ids);
     const videos = this.data.videos.filter((video) => Boolean(video.folderId && allIds.has(video.folderId)));
     if (deleteLocalFiles) {
@@ -649,6 +680,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async setFolderCover(folderId: string, coverPath: string | undefined): Promise<void> {
+    this.recordUndo();
     const folder = this.getFolder(folderId);
     if (!folder) return;
     const previous = folder.coverPath;
@@ -674,6 +706,7 @@ export default class VideoLibraryPlugin extends Plugin {
     targetFolderId: string | null,
     position?: { videoId: string; after: boolean } | null
   ): Promise<void> {
+    this.recordUndo();
     if (targetFolderId && !this.getFolder(targetFolderId)) return;
     const now = Date.now();
     for (const video of this.data.videos) {
@@ -735,6 +768,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async createTag(name: string): Promise<TagMutationResult> {
+    this.recordUndo();
     const clean = name.trim();
     if (!clean) return { ok: false, reason: "empty" };
     if (this.getTagByName(clean)) return { ok: false, reason: "duplicate" };
@@ -772,6 +806,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async renameTag(id: string, name: string): Promise<TagMutationResult> {
+    this.recordUndo();
     const tag = this.data.tags.find((candidate) => candidate.id === id);
     if (!tag) return { ok: false, reason: "empty" };
     const clean = name.trim();
@@ -796,6 +831,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async deleteTag(id: string): Promise<number> {
+    this.recordUndo();
     const tag = this.data.tags.find((candidate) => candidate.id === id);
     if (!tag) return 0;
     let changed = 0;
@@ -853,6 +889,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async saveMarker(marker: Marker): Promise<void> {
+    this.recordUndo();
     const clean = marker.name.trim();
     if (!clean) return;
     const existing = this.data.markers.find((candidate) => candidate.id === marker.id);
@@ -882,7 +919,60 @@ export default class VideoLibraryPlugin extends Plugin {
     this.refreshViews();
   }
 
+  async importScrapeSites(payload: unknown): Promise<number> {
+    this.recordUndo();
+    const source = Array.isArray(payload)
+      ? payload
+      : payload && typeof payload === "object" && Array.isArray((payload as { sites?: unknown }).sites)
+        ? ((payload as { sites: unknown[] }).sites as unknown[])
+        : [];
+    let imported = 0;
+    for (const raw of source.slice(0, 500)) {
+      if (!raw || typeof raw !== "object") continue;
+      const data = raw as Partial<Marker> & { provider?: unknown };
+      const name = String(data.name || "").trim();
+      if (!name) continue;
+      const id = data.id ? String(data.id) : uid("site");
+      const providerValue = data.metatubeProvider ?? data.provider;
+      const existing = this.data.markers.find(
+        (marker) =>
+          marker.id === id ||
+          (marker.kind === "site" && marker.name.toLowerCase() === name.toLowerCase())
+      );
+      const marker: Marker = {
+        id: existing?.id || id,
+        name,
+        color: data.color ? String(data.color) : TAG_COLORS[this.data.markers.length % TAG_COLORS.length],
+        kind: "site",
+        enabled: data.enabled !== false,
+        metatubeProvider: providerValue ? String(providerValue).trim() || undefined : undefined,
+        capabilities: Array.isArray(data.capabilities)
+          ? data.capabilities.map((value) => String(value)).filter(Boolean)
+          : [],
+        url: data.url ? String(data.url).trim() || undefined : undefined,
+        description: data.description ? String(data.description).trim() || undefined : undefined,
+        sortOrder: existing?.sortOrder ?? this.data.markers.length,
+        createdAt: existing?.createdAt || Date.now()
+      };
+      if (existing) {
+        Object.assign(existing, marker);
+      } else {
+        this.data.markers.push(marker);
+      }
+      imported += 1;
+    }
+    if (imported > 0) {
+      this.data.markers.forEach((marker, index) => {
+        marker.sortOrder = index;
+      });
+      await this.persist();
+      this.refreshViews();
+    }
+    return imported;
+  }
+
   async setMarkerEnabled(id: string, enabled: boolean): Promise<void> {
+    this.recordUndo();
     const marker = this.getMarker(id);
     if (!marker) return;
     marker.enabled = enabled;
@@ -891,6 +981,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async reorderMarkers(orderedIds: string[]): Promise<void> {
+    this.recordUndo();
     const positions = new Map(orderedIds.map((id, index) => [id, index]));
     this.data.markers.sort(
       (a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER)
@@ -903,6 +994,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async deleteMarker(id: string): Promise<void> {
+    this.recordUndo();
     this.data.markers = this.data.markers.filter((marker) => marker.id !== id);
     for (const video of this.data.videos) {
       if (!video.markers?.includes(id)) continue;
@@ -1118,6 +1210,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async addVideo(video: VideoItem): Promise<void> {
+    this.recordUndo();
     this.ensureAutoMarker(video);
     await this.ensureExternalLink(video);
     this.data.videos.unshift(video);
@@ -1133,6 +1226,7 @@ export default class VideoLibraryPlugin extends Plugin {
     folderId: string | null = null,
     categoryId = UNCATEGORIZED_ID
   ): Promise<{ imported: number; skipped: number; ids: string[] }> {
+    this.recordUndo();
     const nodePath = getNodePath();
     let imported = 0;
     let skipped = 0;
@@ -1175,6 +1269,7 @@ export default class VideoLibraryPlugin extends Plugin {
     folderPath: string,
     parentFolderId: string | null = null
   ): Promise<{ imported: number; skipped: number; folders: number; categories: number; ids: string[] }> {
+    this.recordUndo();
     const fs = getNodeFs();
     const nodePath = getNodePath();
     if (!fs?.readdirSync || !nodePath?.basename) {
@@ -1285,6 +1380,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async updateVideo(video: VideoItem): Promise<void> {
+    this.recordUndo();
     const index = this.data.videos.findIndex((candidate) => candidate.id === video.id);
     const previous = index >= 0 ? this.data.videos[index] : undefined;
     if (previous && (previous.localPath !== video.localPath || !video.localExternal)) {
@@ -1305,6 +1401,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async deleteVideo(video: VideoItem, deleteLocalFile = false): Promise<void> {
+    this.recordUndo();
     if (deleteLocalFile && !(await this.deleteLocalSource(video))) {
       new Notice(t("notice.localFileDeleteFailed"));
     }
@@ -1316,6 +1413,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async deleteVideos(videos: VideoItem[], deleteLocalFiles = false): Promise<void> {
+    this.recordUndo();
     const ids = new Set(videos.map((video) => video.id));
     if (deleteLocalFiles) {
       for (const video of videos) {
@@ -1332,6 +1430,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async updateVideos(ids: Set<string>, mutate: (video: VideoItem) => void): Promise<void> {
+    this.recordUndo();
     const now = Date.now();
     for (const video of this.data.videos) {
       if (!ids.has(video.id)) continue;
@@ -1343,6 +1442,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async toggleFavorite(video: VideoItem): Promise<void> {
+    this.recordUndo();
     const target = this.data.videos.find((candidate) => candidate.id === video.id);
     if (!target) return;
     target.favorite = !target.favorite;
@@ -1359,6 +1459,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async setPinned(ids: Set<string>, pinned: boolean): Promise<void> {
+    this.recordUndo();
     const now = Date.now();
     for (const video of this.data.videos) {
       if (!ids.has(video.id)) continue;
@@ -1371,6 +1472,7 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   async reorderVideos(orderedIds: string[]): Promise<void> {
+    this.recordUndo();
     const positions = new Map(orderedIds.map((id, index) => [id, index]));
     for (const video of this.data.videos) {
       const position = positions.get(video.id);

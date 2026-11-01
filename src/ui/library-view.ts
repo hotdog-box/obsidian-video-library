@@ -64,6 +64,7 @@ export class VideoLibraryView extends ItemView {
   private blockNextClick = false;
   private marqueeMoveHandler = (event: PointerEvent) => this.onMarqueeMove(event);
   private marqueeUpHandler = (event: PointerEvent) => this.onMarqueeUp(event);
+  private undoKeyHandler = (event: KeyboardEvent) => this.onUndoKey(event);
 
   constructor(leaf: WorkspaceLeaf, private plugin: VideoLibraryPlugin) {
     super(leaf);
@@ -85,10 +86,21 @@ export class VideoLibraryView extends ItemView {
   async onOpen(): Promise<void> {
     this.containerEl.addClass("vl-view");
     this.rendered = true;
+    this.containerEl.addEventListener("keydown", this.undoKeyHandler);
     this.render();
   }
 
+  private onUndoKey(event: KeyboardEvent): void {
+    if (!(event.ctrlKey || event.metaKey) || event.shiftKey) return;
+    if (event.key.toLowerCase() !== "z") return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+    event.preventDefault();
+    void this.plugin.undo();
+  }
+
   async onClose(): Promise<void> {
+    this.containerEl.removeEventListener("keydown", this.undoKeyHandler);
     window.clearTimeout(this.searchTimer);
     window.clearTimeout(this.homeCarouselTimer);
     this.removeMarqueeListeners();
@@ -545,6 +557,14 @@ export class VideoLibraryView extends ItemView {
       this.renderGrid();
     });
 
+    const undo = actions.createEl("button", {
+      cls: "vl-toolbar-undo",
+      attr: { type: "button", title: t("action.undo"), "aria-label": t("action.undo") }
+    });
+    setIcon(undo, "undo-2");
+    undo.disabled = !this.plugin.canUndo();
+    undo.addEventListener("click", () => void this.plugin.undo());
+
     const viewSwitch = actions.createDiv({ cls: "vl-view-switch" });
     this.viewToggleButtons.clear();
     const currentMode = this.plugin.data.settings.viewMode === "list" ? "list" : "grid";
@@ -618,6 +638,13 @@ export class VideoLibraryView extends ItemView {
     title.createEl("h1", { text: t("home.title") });
     title.createEl("p", { text: t("home.subtitle") });
     const actions = header.createDiv({ cls: "vl-home-header-actions" });
+    const undo = actions.createEl("button", {
+      cls: "vl-home-undo",
+      attr: { type: "button", title: t("action.undo"), "aria-label": t("action.undo") }
+    });
+    setIcon(undo, "undo-2");
+    undo.disabled = !this.plugin.canUndo();
+    undo.addEventListener("click", () => void this.plugin.undo());
     const add = actions.createEl("button", { cls: "mod-cta", attr: { type: "button" } });
     setIcon(add.createSpan({ cls: "vl-btn-icon" }), "plus");
     add.createSpan({ text: t("action.addVideo") });
@@ -1673,17 +1700,19 @@ export class VideoLibraryView extends ItemView {
   private filteredVideos(): VideoItem[] {
     const query = this.query.trim().toLowerCase();
     let videos = this.plugin.data.videos.filter((video) => {
-      if (this.filter === "favorites" && !video.favorite) return false;
-      if (
-        this.filter !== "all" &&
-        this.filter !== "favorites" &&
-        (video.categoryId || UNCATEGORIZED_ID) !== this.filter
-      ) {
-        return false;
-      }
-      if (this.filter === "all") {
-        const folderId = video.folderId || null;
-        if (folderId !== (this.currentFolderId || null)) return false;
+      if (!query) {
+        if (this.filter === "favorites" && !video.favorite) return false;
+        if (
+          this.filter !== "all" &&
+          this.filter !== "favorites" &&
+          (video.categoryId || UNCATEGORIZED_ID) !== this.filter
+        ) {
+          return false;
+        }
+        if (this.filter === "all") {
+          const folderId = video.folderId || null;
+          if (folderId !== (this.currentFolderId || null)) return false;
+        }
       }
       if (this.selectedTags.size > 0) {
         const videoTags = new Set(video.tags.map((tag) => tag.toLowerCase()));
@@ -1726,7 +1755,10 @@ export class VideoLibraryView extends ItemView {
   private renderGrid(): void {
     if (!this.gridWrap) return;
     const videos = this.filteredVideos();
-    const folders = this.filter === "all" ? this.plugin.getSubfolders(this.currentFolderId) : [];
+    const folders =
+      this.filter === "all" && !this.query.trim()
+        ? this.plugin.getSubfolders(this.currentFolderId)
+        : [];
     const pinned = videos
       .filter((video) => video.pinned)
       .sort((a, b) => {

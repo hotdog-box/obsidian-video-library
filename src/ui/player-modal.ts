@@ -37,6 +37,9 @@ export class VideoPlayerModal extends Modal {
 
   private detailsEl: HTMLElement | null = null;
   private durationValueEl: HTMLElement | null = null;
+  private relatedEl: HTMLElement | null = null;
+  private relatedFilter: { type: "tag" | "series" | "performer"; value: string } | null = null;
+  private relatedLimit = 10;
   private quickEditOpen = false;
   private draftTags: string[] = [];
   private draftTagsEl: HTMLElement | null = null;
@@ -183,12 +186,19 @@ export class VideoPlayerModal extends Modal {
     this.infoRow(grid, t("player.fileSize"), formatFileSize(this.plugin.getVideoFileSize(this.item)));
     this.infoRow(grid, t("form.category"), this.plugin.categoryName(this.item.categoryId));
     this.infoRow(grid, t("form.studio"), this.item.studio || "—");
-    this.infoRow(grid, t("form.series"), this.item.series || "—");
-    this.infoRow(
-      grid,
-      t("form.performers"),
-      this.item.performers && this.item.performers.length > 0 ? this.item.performers.join(" / ") : "—"
-    );
+    const seriesValue = this.infoRow(grid, t("form.series"), this.item.series || "—");
+    if (this.item.series) this.makeRelatedLink(seriesValue, "series", this.item.series);
+    const performersRow = container.createDiv({ cls: "vl-player-info-row" });
+    performersRow.createSpan({ cls: "vl-player-info-label", text: t("form.performers") });
+    const performersValue = performersRow.createSpan({ cls: "vl-player-info-value vl-player-info-tags" });
+    if (!this.item.performers || this.item.performers.length === 0) {
+      performersValue.setText("—");
+    } else {
+      for (const performer of this.item.performers) {
+        const link = performersValue.createSpan({ cls: "vl-related-link", text: performer });
+        this.makeRelatedLink(link, "performer", performer);
+      }
+    }
     this.infoRow(grid, t("form.author"), this.item.author || "—");
     this.infoRow(grid, t("form.releaseDate"), this.item.releaseDate || "—");
     this.infoRow(grid, t("player.added"), formatDate(this.item.createdAt));
@@ -215,7 +225,16 @@ export class VideoPlayerModal extends Modal {
       tagsValue.setText("—");
     } else {
       for (const tag of this.item.tags) {
-        tagsValue.createSpan({ text: `#${tag}`, cls: "vl-tag" });
+        if (!this.plugin.data.settings.relatedEnabled) {
+          tagsValue.createSpan({ text: `#${tag}`, cls: "vl-tag" });
+          continue;
+        }
+        const chip = tagsValue.createEl("button", {
+          text: `#${tag}`,
+          cls: "vl-tag vl-related-tag",
+          attr: { type: "button", title: t("player.relatedFilter") }
+        });
+        chip.addEventListener("click", () => this.showRelated("tag", tag));
       }
     }
 
@@ -232,6 +251,130 @@ export class VideoPlayerModal extends Modal {
     notesValue.setText(this.item.notes || "—");
 
     if (this.quickEditOpen) this.renderQuickEdit(container);
+    this.relatedEl = container.createDiv({ cls: "vl-player-related" });
+    this.renderRelated();
+  }
+
+  private makeRelatedLink(element: HTMLElement, type: "tag" | "series" | "performer", value: string): void {
+    if (!this.plugin.data.settings.relatedEnabled) {
+      element.removeClass("vl-related-link");
+      return;
+    }
+    element.addClass("vl-related-link");
+    element.setAttribute("role", "button");
+    element.setAttribute("tabindex", "0");
+    element.setAttribute("title", t("player.relatedFilter"));
+    element.addEventListener("click", () => this.showRelated(type, value));
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        this.showRelated(type, value);
+      }
+    });
+  }
+
+  private showRelated(type: "tag" | "series" | "performer", value: string): void {
+    if (!this.plugin.data.settings.relatedEnabled) return;
+    this.relatedFilter = { type, value };
+    this.relatedLimit = 10;
+    this.renderRelated();
+  }
+
+  private relatedVideos(): VideoItem[] {
+    const filter = this.relatedFilter;
+    if (!filter) return [];
+    const value = filter.value.toLowerCase();
+    return this.plugin.data.videos
+      .filter((video) => {
+        if (video.id === this.item.id) return false;
+        if (filter.type === "tag") return video.tags.some((tag) => tag.toLowerCase() === value);
+        if (filter.type === "series") return (video.series || "").toLowerCase() === value;
+        return (video.performers || []).some((performer) => performer.toLowerCase() === value);
+      })
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  private renderRelated(): void {
+    const container = this.relatedEl;
+    if (!container) return;
+    container.empty();
+    if (!this.plugin.data.settings.relatedEnabled || !this.relatedFilter) return;
+    const filter = this.relatedFilter;
+    const videos = this.relatedVideos();
+    const label =
+      filter.type === "tag"
+        ? `#${filter.value}`
+        : filter.type === "series"
+          ? filter.value
+          : filter.value;
+    const head = container.createDiv({ cls: "vl-player-related-head" });
+    head.createEl("h5", {
+      text: t("player.relatedTitle", { type: t(`player.relatedType.${filter.type}` as never), value: label })
+    });
+    const close = head.createEl("button", {
+      cls: "vl-player-related-close",
+      attr: { type: "button", title: t("action.cancel"), "aria-label": t("action.cancel") }
+    });
+    setIcon(close, "x");
+    close.addEventListener("click", () => {
+      this.relatedFilter = null;
+      this.relatedLimit = 10;
+      this.renderRelated();
+    });
+
+    if (videos.length === 0) {
+      container.createDiv({ text: t("player.relatedEmpty"), cls: "vl-player-related-empty" });
+      return;
+    }
+
+    const list = container.createDiv({ cls: "vl-player-related-list" });
+    for (const video of videos.slice(0, this.relatedLimit)) {
+      this.renderRelatedRow(list, video);
+    }
+    if (videos.length > 10) {
+      const more = container.createEl("button", {
+        cls: "vl-player-related-more",
+        attr: { type: "button" }
+      });
+      if (this.relatedLimit < videos.length) {
+        more.setText(t("player.relatedMore", { count: videos.length - this.relatedLimit }));
+        more.addEventListener("click", () => {
+          this.relatedLimit = videos.length;
+          this.renderRelated();
+        });
+      } else {
+        more.setText(t("player.relatedLess"));
+        more.addEventListener("click", () => {
+          this.relatedLimit = 10;
+          this.renderRelated();
+        });
+      }
+    }
+  }
+
+  private renderRelatedRow(parent: HTMLElement, video: VideoItem): void {
+    const row = parent.createDiv({ cls: "vl-player-related-row", attr: { role: "button", tabindex: "0" } });
+    const thumb = row.createDiv({ cls: "vl-player-related-thumb" });
+    if (video.coverPath) {
+      const image = thumb.createEl("img", { attr: { alt: "", loading: "lazy" } });
+      void this.plugin.coverStore.getUrl(video.coverPath).then((url) => {
+        if (url) image.src = url;
+      });
+    }
+    const body = row.createDiv({ cls: "vl-player-related-body" });
+    body.createDiv({ text: video.title || t("misc.untitled"), cls: "vl-player-related-name" });
+    const meta = body.createDiv({ cls: "vl-player-related-meta" });
+    meta.createSpan({ text: this.plugin.categoryName(video.categoryId) });
+    if (video.studio) meta.createSpan({ text: video.studio });
+    if (video.duration) meta.createSpan({ text: formatDuration(video.duration) });
+    const open = (): void => {
+      this.close();
+      new VideoPlayerModal(this.app, this.plugin, video).open();
+    };
+    row.addEventListener("click", open);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") open();
+    });
   }
 
   private renderQuickEdit(parent: HTMLElement): void {

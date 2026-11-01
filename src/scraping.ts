@@ -89,15 +89,25 @@ export class MetaTubeClient {
     return headers;
   }
 
-  private async get<T>(path: string): Promise<T> {
+  private async get<T>(path: string, notFoundValue?: T): Promise<T> {
     if (!this.configured) throw new Error("MetaTube URL is not configured");
     const timeout = new Promise<never>((_, reject) => {
-      window.setTimeout(() => reject(new Error("MetaTube request timed out")), 8000);
+      window.setTimeout(() => reject(new Error("MetaTube request timed out")), 90000);
     });
-    const response = await Promise.race([
-      requestUrl({ url: `${this.baseUrl()}${path}`, method: "GET", headers: this.headers() }),
-      timeout
-    ]);
+    let response: Awaited<ReturnType<typeof requestUrl>>;
+    try {
+      response = await Promise.race([
+        requestUrl({ url: `${this.baseUrl()}${path}`, method: "GET", headers: this.headers() }),
+        timeout
+      ]);
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      if (status === 404 && notFoundValue !== undefined) return notFoundValue;
+      throw error;
+    }
+    if (response.status === 404 && notFoundValue !== undefined) {
+      return notFoundValue;
+    }
     if (response.status >= 400) {
       throw new Error(`MetaTube HTTP ${response.status}`);
     }
@@ -112,9 +122,9 @@ export class MetaTubeClient {
   }
 
   async search(query: string, provider?: string): Promise<MetaTubeSearchResult[]> {
-    const params = new URLSearchParams({ q: query, fallback: "true" });
+    const params = new URLSearchParams({ q: query, fallback: provider?.trim() ? "false" : "true" });
     if (provider?.trim()) params.set("provider", provider.trim());
-    return this.get<MetaTubeSearchResult[]>(`/v1/movies/search?${params.toString()}`);
+    return this.get<MetaTubeSearchResult[]>(`/v1/movies/search?${params.toString()}`, []);
   }
 
   async movie(provider: string, id: string): Promise<MetaTubeMovie> {

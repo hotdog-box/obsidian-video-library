@@ -11,6 +11,8 @@ import { CategoryEditModal, CategoryManagerModal } from "./category-modal";
 import { VideoEditModal } from "./video-modal";
 import { VideoPlayerModal } from "./player-modal";
 import { PreviewConfigModal } from "./preview-config-modal";
+import { FolderCoverModal } from "./folder-cover-modal";
+import { MoveToFolderModal } from "./move-modal";
 
 export const VIEW_TYPE = "video-library-view";
 
@@ -31,6 +33,8 @@ export class VideoLibraryView extends ItemView {
   private selectedIds = new Set<string>();
   private selectedFolderIds = new Set<string>();
   private currentFolderId: string | null = null;
+  private expandedFolderIds = new Set<string>();
+  private folderTreeInitialized = false;
   private lastSelectedKey: string | null = null;
   private visibleVideoIds: string[] = [];
   private visibleFolderIds: string[] = [];
@@ -38,6 +42,7 @@ export class VideoLibraryView extends ItemView {
   private selectionBar!: HTMLElement;
   private selectionCountEl!: HTMLElement;
   private batchCategorySelect!: HTMLSelectElement;
+  private viewToggleButtons = new Map<"grid" | "list", HTMLButtonElement>();
   private selectedTags = new Set<string>();
   private tagFilterBar!: HTMLElement;
   private tagFilterChips!: HTMLElement;
@@ -113,6 +118,14 @@ export class VideoLibraryView extends ItemView {
     }
     if (this.currentFolderId && !this.plugin.getFolder(this.currentFolderId)) {
       this.currentFolderId = null;
+    }
+    for (const id of [...this.expandedFolderIds]) {
+      if (!existingFolders.has(id)) this.expandedFolderIds.delete(id);
+    }
+    if (this.currentFolderId) {
+      for (const folder of this.plugin.folderPath(this.currentFolderId)) {
+        this.expandedFolderIds.add(folder.id);
+      }
     }
     const existingTags = new Set(this.plugin.data.tags.map((tag) => tag.name));
     for (const name of [...this.selectedTags]) {
@@ -212,6 +225,22 @@ export class VideoLibraryView extends ItemView {
       categoryNav.createDiv({ text: t("category.empty"), cls: "vl-nav-empty" });
     }
 
+    const folderSection = sidebar.createDiv({ cls: "vl-nav-section vl-folder-tree-section" });
+    const folderHeader = folderSection.createDiv({ cls: "vl-nav-section-header" });
+    folderHeader.createSpan({ text: t("nav.folders") });
+    const addFolder = folderHeader.createEl("button", {
+      cls: "vl-text-icon-button",
+      attr: { type: "button", title: t("folder.new"), "aria-label": t("folder.new") }
+    });
+    setIcon(addFolder, "folder-plus");
+    addFolder.addEventListener("click", () => {
+      this.filter = "all";
+      this.currentFolderId = null;
+      this.render();
+      this.promptNewFolder();
+    });
+    this.renderFolderTree(folderSection);
+
     const footer = sidebar.createDiv({ cls: "vl-sidebar-footer" });
     const settings = footer.createEl("button", { cls: "vl-footer-button", attr: { type: "button" } });
     setIcon(settings.createSpan({ cls: "vl-btn-icon" }), "settings");
@@ -239,6 +268,102 @@ export class VideoLibraryView extends ItemView {
         event.preventDefault();
         this.setFilter(id);
       }
+    });
+  }
+
+  private renderFolderTree(parent: HTMLElement): void {
+    const tree = parent.createDiv({ cls: "vl-folder-tree" });
+    const roots = this.plugin.getSubfolders(null);
+    if (roots.length === 0) {
+      tree.createDiv({ text: t("folder.treeEmpty"), cls: "vl-nav-empty" });
+      return;
+    }
+
+    const rootRow = tree.createDiv({
+      cls: `vl-folder-tree-item vl-folder-tree-root ${this.filter === "all" && !this.currentFolderId ? "is-active" : ""}`.trim(),
+      attr: { role: "button", tabindex: "0" }
+    });
+    const rootIcon = rootRow.createSpan({ cls: "vl-nav-icon" });
+    setIcon(rootIcon, "library");
+    rootRow.createSpan({ text: t("move.root"), cls: "vl-nav-label" });
+    rootRow.createSpan({ text: String(this.plugin.data.videos.length), cls: "vl-nav-count" });
+    rootRow.addEventListener("click", () => this.openFolder(null));
+    rootRow.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        this.openFolder(null);
+      }
+    });
+    this.bindFolderDrop(rootRow, null);
+
+    for (const folder of roots) {
+      this.renderFolderTreeNode(tree, folder, 0);
+    }
+    this.folderTreeInitialized = true;
+  }
+
+  private renderFolderTreeNode(parent: HTMLElement, folder: Folder, depth: number): void {
+    const children = this.plugin.getSubfolders(folder.id);
+    if (!this.folderTreeInitialized && depth === 0) this.expandedFolderIds.add(folder.id);
+    const expanded = this.expandedFolderIds.has(folder.id);
+    const active = this.filter === "all" && this.currentFolderId === folder.id;
+    const wrap = parent.createDiv({ cls: "vl-folder-tree-branch" });
+    const row = wrap.createDiv({
+      cls: `vl-folder-tree-item ${active ? "is-active" : ""}`.trim(),
+      attr: { role: "button", tabindex: "0", "data-folder-id": folder.id }
+    });
+    row.setCssStyles({ paddingLeft: `${6 + depth * 12}px` });
+
+    let toggle: HTMLButtonElement | null = null;
+    if (children.length > 0) {
+      toggle = row.createEl("button", {
+        cls: "vl-folder-tree-toggle",
+        attr: {
+          type: "button",
+          "aria-label": expanded ? t("folder.collapse") : t("folder.expand"),
+          title: expanded ? t("folder.collapse") : t("folder.expand")
+        }
+      });
+      setIcon(toggle, expanded ? "chevron-down" : "chevron-right");
+    } else {
+      row.createSpan({ cls: "vl-folder-tree-spacer" });
+    }
+
+    const icon = row.createSpan({ cls: "vl-folder-tree-icon" });
+    setIcon(icon, "folder");
+    row.createSpan({ text: folder.name, cls: "vl-nav-label" });
+    row.createSpan({ text: String(this.plugin.folderVideosRecursive(folder.id).length), cls: "vl-nav-count" });
+
+    row.addEventListener("click", () => this.openFolder(folder.id));
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        this.openFolder(folder.id);
+      }
+    });
+    row.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.ensureContextSelection("folder", folder.id, event);
+      this.showFolderContextMenu(event, folder);
+    });
+    this.bindFolderDrop(row, folder.id);
+
+    if (children.length === 0) return;
+    const childWrap = wrap.createDiv({ cls: "vl-folder-tree-children" });
+    childWrap.toggleClass("is-collapsed", !expanded);
+    for (const child of children) this.renderFolderTreeNode(childWrap, child, depth + 1);
+
+    toggle?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const next = !this.expandedFolderIds.has(folder.id);
+      if (next) this.expandedFolderIds.add(folder.id);
+      else this.expandedFolderIds.delete(folder.id);
+      childWrap.toggleClass("is-collapsed", !next);
+      setIcon(toggle, next ? "chevron-down" : "chevron-right");
+      const label = next ? t("folder.collapse") : t("folder.expand");
+      toggle.setAttribute("aria-label", label);
+      toggle.setAttribute("title", label);
     });
   }
 
@@ -352,6 +477,13 @@ export class VideoLibraryView extends ItemView {
     for (const [id, item] of this.navItems) {
       item.toggleClass("is-active", id === this.filter);
     }
+    for (const row of Array.from(this.bodyEl().querySelectorAll<HTMLElement>(".vl-folder-tree-item"))) {
+      const folderId = row.dataset.folderId || null;
+      const active =
+        this.filter === "all" &&
+        (folderId ? this.currentFolderId === folderId : this.currentFolderId === null);
+      row.toggleClass("is-active", active);
+    }
   }
 
   private renderMain(root: HTMLElement): void {
@@ -409,6 +541,26 @@ export class VideoLibraryView extends ItemView {
       void this.plugin.setSort(sort.value as SortMode);
       this.renderGrid();
     });
+
+    const viewSwitch = actions.createDiv({ cls: "vl-view-switch" });
+    this.viewToggleButtons.clear();
+    const currentMode = this.plugin.data.settings.viewMode === "list" ? "list" : "grid";
+    for (const mode of ["grid", "list"] as const) {
+      const button = viewSwitch.createEl("button", {
+        cls: `vl-view-switch-button ${currentMode === mode ? "is-active" : ""}`.trim(),
+        attr: {
+          type: "button",
+          title: t(mode === "grid" ? "view.grid" : "view.list"),
+          "aria-label": t(mode === "grid" ? "view.grid" : "view.list"),
+          "aria-pressed": currentMode === mode ? "true" : "false"
+        }
+      });
+      setIcon(button, mode === "grid" ? "layout-grid" : "list");
+      button.addEventListener("click", () => {
+        void this.plugin.setViewMode(mode);
+      });
+      this.viewToggleButtons.set(mode, button);
+    }
 
     const add = actions.createEl("button", { cls: "vl-toolbar-add mod-cta", attr: { type: "button" } });
     setIcon(add.createSpan({ cls: "vl-btn-icon" }), "plus");
@@ -730,7 +882,15 @@ export class VideoLibraryView extends ItemView {
     this.selectionButton(actions, "pin", t("pin.pinSelected"), () => void this.batchPin(true));
     this.selectionButton(actions, "pin-off", t("pin.unpinSelected"), () => void this.batchPin(false));
     this.selectionButton(actions, "pencil", t("selection.rename"), () => this.openBatchRename());
-    this.selectionButton(actions, "trash-2", t("selection.delete"), () => this.confirmBatchDelete(), "is-danger");
+    this.selectionButton(
+      actions,
+      "folder-input",
+      t("folder.moveTo"),
+      () => this.openMoveModal(),
+      "",
+      "any"
+    );
+    this.selectionButton(actions, "trash-2", t("selection.delete"), () => this.confirmBatchDelete(), "is-danger", "any");
 
     this.selectionBar.createDiv({ text: t("selection.hint"), cls: "vl-selection-hint" });
   }
@@ -740,12 +900,14 @@ export class VideoLibraryView extends ItemView {
     icon: string,
     label: string,
     onClick: () => void,
-    className = ""
+    className = "",
+    scope: "videos" | "any" = "videos"
   ): void {
     const button = parent.createEl("button", {
       cls: `vl-selection-btn ${className}`.trim(),
       attr: { type: "button" }
     });
+    button.dataset.selectionScope = scope;
     setIcon(button.createSpan({ cls: "vl-btn-icon" }), icon);
     button.createSpan({ text: label });
     button.addEventListener("click", onClick);
@@ -790,6 +952,9 @@ export class VideoLibraryView extends ItemView {
   private openFolder(id: string | null): void {
     this.filter = "all";
     this.currentFolderId = id;
+    if (id) {
+      for (const folder of this.plugin.folderPath(id)) this.expandedFolderIds.add(folder.id);
+    }
     this.clearSelection();
     this.render();
     const main = this.bodyEl().querySelector<HTMLElement>(".vl-main");
@@ -833,14 +998,24 @@ export class VideoLibraryView extends ItemView {
   private confirmDeleteFolder(folderId: string): void {
     const folder = this.plugin.getFolder(folderId);
     if (!folder) return;
+    const contents = this.plugin.folderVideosRecursive(folderId);
+    const hasLocalFiles = contents.some((video) => Boolean(video.localPath));
     new ConfirmModal(this.app, {
       title: t("folder.deleteTitle"),
-      description: t("folder.deleteDesc", { name: folder.name }),
+      description: t("folder.deleteContentsDesc", {
+        name: folder.name,
+        count: contents.length
+      }),
       confirmText: t("confirm.delete"),
       danger: true,
-      onConfirm: async () => {
-        await this.plugin.deleteFolders(new Set([folderId]));
-        new Notice(t("folder.deleted", { count: 1 }));
+      checkbox: hasLocalFiles ? { label: t("confirm.deleteLocalFiles") } : undefined,
+      onConfirm: async (deleteLocalFiles) => {
+        const result = await this.plugin.deleteFolders(new Set([folderId]), deleteLocalFiles);
+        new Notice(t("folder.deletedItems", { folders: result.folders, videos: result.videos }));
+        if (this.currentFolderId && !this.plugin.getFolder(this.currentFolderId)) {
+          this.currentFolderId = null;
+        }
+        this.clearSelection();
         this.refresh();
       }
     }).open();
@@ -960,6 +1135,11 @@ export class VideoLibraryView extends ItemView {
     }).open();
   }
 
+  private selectableElements(): HTMLElement[] {
+    if (!this.gridWrap) return [];
+    return Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card, .vl-list-row"));
+  }
+
   private updateSelectionUi(): void {
     if (!this.selectionBar) return;
     const count = this.selectedIds.size + this.selectedFolderIds.size;
@@ -972,11 +1152,11 @@ export class VideoLibraryView extends ItemView {
     });
     this.batchCategorySelect.disabled = this.selectedIds.size === 0;
     const actionButtons = this.selectionBar.querySelectorAll<HTMLButtonElement>(".vl-selection-actions button");
-    actionButtons.forEach((button, index) => {
-      button.disabled = index === actionButtons.length - 1 ? count === 0 : this.selectedIds.size === 0;
+    actionButtons.forEach((button) => {
+      button.disabled = button.dataset.selectionScope === "any" ? count === 0 : this.selectedIds.size === 0;
     });
 
-    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
+    for (const card of this.selectableElements()) {
       const type = card.dataset.itemType === "folder" ? "folder" : "video";
       const id = card.dataset.itemId || card.dataset.videoId || "";
       const selected = type === "folder" ? this.selectedFolderIds.has(id) : this.selectedIds.has(id);
@@ -1142,7 +1322,8 @@ export class VideoLibraryView extends ItemView {
     const folderIds = new Set(this.selectedFolderIds);
     if (videos.length === 0 && folderIds.size === 0) return;
     const total = videos.length + folderIds.size;
-    const hasLocalFiles = videos.some((video) => Boolean(video.localPath));
+    const folderVideos = [...folderIds].flatMap((id) => this.plugin.folderVideosRecursive(id));
+    const hasLocalFiles = [...videos, ...folderVideos].some((video) => Boolean(video.localPath));
     new ConfirmModal(this.app, {
       title: t("selection.deleteTitle", { count: total }),
       description:
@@ -1154,17 +1335,35 @@ export class VideoLibraryView extends ItemView {
       checkbox: hasLocalFiles ? { label: t("confirm.deleteLocalFiles") } : undefined,
       onConfirm: async (deleteLocalFiles) => {
         if (videos.length > 0) await this.plugin.deleteVideos(videos, deleteLocalFiles);
-        if (folderIds.size > 0) await this.plugin.deleteFolders(folderIds);
-        new Notice(t("selection.deleted", { count: total }));
+        let removedVideos = 0;
+        if (folderIds.size > 0) {
+          const result = await this.plugin.deleteFolders(folderIds, deleteLocalFiles);
+          removedVideos = result.videos;
+        }
+        new Notice(t("selection.deleted", { count: total + removedVideos }));
+        if (this.currentFolderId && !this.plugin.getFolder(this.currentFolderId)) {
+          this.currentFolderId = null;
+        }
         this.clearSelection();
+        this.refresh();
       }
+    }).open();
+  }
+
+  private openMoveModal(): void {
+    const videos = new Set(this.selectedIds);
+    const folders = new Set(this.selectedFolderIds);
+    if (videos.size === 0 && folders.size === 0) return;
+    new MoveToFolderModal(this.app, this.plugin, videos, folders, (count) => {
+      new Notice(t("folder.moved", { count }));
+      this.clearSelection();
     }).open();
   }
 
   private onGridPointerDown(event: PointerEvent): void {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement | null;
-    if (target?.closest("button, input, select, a, .vl-preview-audio")) return;
+    if (target?.closest("button, input, select, a, .vl-preview-audio, .vl-card, .vl-list-row")) return;
 
     this.removeMarqueeListeners();
     this.marqueeEl?.remove();
@@ -1209,7 +1408,7 @@ export class VideoLibraryView extends ItemView {
     }
 
     const hits = new Set(this.marqueeHits({ left, top, right: left + width, bottom: top + height }));
-    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
+    for (const card of this.selectableElements()) {
       const type = card.dataset.itemType === "folder" ? "folder" : "video";
       const id = card.dataset.itemId || card.dataset.videoId || "";
       card.toggleClass("is-marquee-hit", hits.has(this.selectionKey(type, id)));
@@ -1234,7 +1433,7 @@ export class VideoLibraryView extends ItemView {
     this.marqueeStart = null;
     this.gridWrap.removeClass("is-marquee-active");
 
-    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
+    for (const card of this.selectableElements()) {
       card.removeClass("is-marquee-hit");
     }
 
@@ -1258,7 +1457,7 @@ export class VideoLibraryView extends ItemView {
 
   private marqueeHits(rect: { left: number; top: number; right: number; bottom: number }): string[] {
     const hits: string[] = [];
-    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
+    for (const card of this.selectableElements()) {
       const cardRect = card.getBoundingClientRect();
       const intersects =
         cardRect.left < rect.right &&
@@ -1287,10 +1486,12 @@ export class VideoLibraryView extends ItemView {
     event.stopPropagation();
     const itemSelected =
       type === "folder" ? this.selectedFolderIds.has(id) : this.selectedIds.has(id);
+    if (!itemSelected) this.selectOnly(type, id);
     this.draggingId = id;
-    this.dragPayload = itemSelected
-      ? { videos: [...this.selectedIds], folders: [...this.selectedFolderIds] }
-      : { videos: type === "video" ? [id] : [], folders: type === "folder" ? [id] : [] };
+    this.dragPayload = {
+      videos: [...this.selectedIds],
+      folders: [...this.selectedFolderIds]
+    };
     card.addClass("is-dragging");
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = "move";
@@ -1301,19 +1502,25 @@ export class VideoLibraryView extends ItemView {
   }
 
   private onCardDragOver(event: DragEvent, video: VideoItem, card: HTMLElement): void {
-    if (!this.dragPayload || this.dragPayload.videos.length !== 1 || this.dragPayload.folders.length > 0) {
-      return;
-    }
-    const videoId = this.dragPayload.videos[0];
-    if (videoId === video.id) return;
-    const dragged = this.plugin.data.videos.find((candidate) => candidate.id === videoId);
-    if (!dragged || Boolean(dragged.pinned) !== Boolean(video.pinned)) return;
+    if (!this.dragPayload) return;
+    if (this.dragPayload.videos.includes(video.id)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    const rect = card.getBoundingClientRect();
-    const after = event.clientY > rect.top + rect.height / 2;
     this.clearDropIndicators();
-    card.addClass(after ? "drop-after" : "drop-before");
+    const targetFolder = video.folderId || null;
+    const sameFolder = targetFolder === (this.currentFolderId || null);
+    const draggedVideos = this.dragPayload.videos
+      .map((id) => this.plugin.data.videos.find((candidate) => candidate.id === id))
+      .filter((candidate): candidate is VideoItem => Boolean(candidate));
+    const pinnedMatches =
+      draggedVideos.length > 0 && draggedVideos.every((candidate) => Boolean(candidate.pinned) === Boolean(video.pinned));
+    if (sameFolder && pinnedMatches && this.dragPayload.folders.length === 0) {
+      const rect = card.getBoundingClientRect();
+      const after = event.clientY > rect.top + rect.height / 2;
+      card.addClass(after ? "drop-after" : "drop-before");
+    } else {
+      card.addClass("drop-into");
+    }
   }
 
   private onFolderDragOver(event: DragEvent, folder: Folder, card: HTMLElement): void {
@@ -1340,10 +1547,17 @@ export class VideoLibraryView extends ItemView {
     const payload = this.dragPayload;
     const after = card.classList.contains("drop-after");
     this.clearDragState();
-    if (!payload || payload.videos.length !== 1 || payload.folders.length > 0) return;
-    const draggedId = payload.videos[0];
-    if (draggedId === video.id) return;
-    void this.reorderByDrop(draggedId, video.id, after);
+    if (!payload || payload.videos.includes(video.id)) return;
+    const targetFolderId = video.folderId || null;
+    void this.plugin
+      .moveItems(new Set(payload.videos), new Set(payload.folders), targetFolderId, {
+        videoId: video.id,
+        after
+      })
+      .then(() => {
+        new Notice(t("folder.moved", { count: payload.videos.length + payload.folders.length }));
+        this.clearSelection();
+      });
   }
 
   private onFolderDrop(event: DragEvent, folder: Folder, card: HTMLElement): void {
@@ -1396,7 +1610,7 @@ export class VideoLibraryView extends ItemView {
   }
 
   private clearDropIndicators(): void {
-    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
+    for (const card of this.selectableElements()) {
       card.removeClass("drop-before", "drop-after", "drop-into");
     }
   }
@@ -1404,7 +1618,7 @@ export class VideoLibraryView extends ItemView {
   private clearDragState(): void {
     this.draggingId = null;
     this.dragPayload = null;
-    for (const card of Array.from(this.gridWrap.querySelectorAll<HTMLElement>(".vl-card"))) {
+    for (const card of this.selectableElements()) {
       card.removeClass("is-dragging", "drop-before", "drop-after", "drop-into");
     }
   }
@@ -1505,13 +1719,16 @@ export class VideoLibraryView extends ItemView {
       this.renderPinnedSection(pinned, collapsed);
     }
 
+    const listMode = this.plugin.data.settings.viewMode === "list";
     if (folders.length > 0 || regular.length > 0) {
-      const grid = this.gridWrap.createDiv({ cls: "vl-grid" });
+      const grid = this.gridWrap.createDiv({ cls: listMode ? "vl-list" : "vl-grid" });
       for (const folder of folders) {
-        this.renderFolderCard(grid, folder);
+        if (listMode) this.renderFolderRow(grid, folder);
+        else this.renderFolderCard(grid, folder);
       }
       for (const video of regular) {
-        this.renderCard(grid, video);
+        if (listMode) this.renderVideoRow(grid, video);
+        else this.renderCard(grid, video);
       }
     }
     this.updateSelectionUi();
@@ -1540,9 +1757,13 @@ export class VideoLibraryView extends ItemView {
     });
 
     if (collapsed) return;
-    const grid = section.createDiv({ cls: "vl-grid vl-pinned-grid" });
+    const listMode = this.plugin.data.settings.viewMode === "list";
+    const grid = section.createDiv({
+      cls: listMode ? "vl-list vl-pinned-list" : "vl-grid vl-pinned-grid"
+    });
     for (const video of pinned) {
-      this.renderCard(grid, video);
+      if (listMode) this.renderVideoRow(grid, video);
+      else this.renderCard(grid, video);
     }
   }
 
@@ -1578,6 +1799,247 @@ export class VideoLibraryView extends ItemView {
     }
   }
 
+  private attachHoverPreview(host: HTMLElement, cover: HTMLElement, video: VideoItem): void {
+    const previewSource =
+      video.provider === "local" || video.provider === "direct" ? this.plugin.getVideoSource(video) : null;
+    if (!previewSource) return;
+    let preview: HoverPreview | null = null;
+    host.addEventListener("mouseenter", () => {
+      preview?.stop();
+      preview = new HoverPreview(previewSource, cover, {
+        duration: video.preview?.duration,
+        clips: video.preview?.clips,
+        fallbackDuration: video.duration,
+        muted: this.plugin.data.settings.previewMuted,
+        volume: this.plugin.data.settings.previewVolume,
+        onAudioChange: (muted, volume) => this.savePreviewAudio(muted, volume)
+      });
+      preview.start();
+    });
+    host.addEventListener("mouseleave", () => {
+      preview?.stop();
+      preview = null;
+    });
+  }
+
+  private renderVideoRow(container: HTMLElement, video: VideoItem): void {
+    const row = container.createDiv({
+      cls: "vl-list-row",
+      attr: {
+        tabindex: "0",
+        role: "button",
+        "aria-label": video.title,
+        "data-item-type": "video",
+        "data-item-id": video.id
+      }
+    });
+    row.dataset.provider = video.provider;
+    row.dataset.videoId = video.id;
+    row.dataset.itemType = "video";
+    row.dataset.itemId = video.id;
+    row.draggable = true;
+    row.setAttribute("draggable", "true");
+
+    const check = row.createEl("button", {
+      cls: "vl-card-check",
+      attr: {
+        type: "button",
+        title: t("selection.check"),
+        "aria-label": t("selection.check"),
+        "aria-pressed": "false"
+      }
+    });
+    setIcon(check, "square");
+    check.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.toggleSelection("video", video.id, event);
+    });
+
+    const thumb = row.createDiv({ cls: "vl-list-thumb" });
+    const placeholder = thumb.createDiv({ cls: "vl-card-placeholder" });
+    setIcon(placeholder.createSpan({ cls: "vl-card-placeholder-icon" }), "film");
+    const img = thumb.createEl("img", {
+      cls: "vl-list-image is-hidden",
+      attr: { alt: "", loading: "lazy", decoding: "async", draggable: "false" }
+    });
+    img.addEventListener("load", () => {
+      img.removeClass("is-hidden");
+      placeholder.addClass("is-hidden");
+    });
+    img.addEventListener("error", () => {
+      img.addClass("is-hidden");
+      placeholder.removeClass("is-hidden");
+    });
+    this.applyCover(img, video, () => {
+      img.addClass("is-hidden");
+      placeholder.removeClass("is-hidden");
+    });
+    if (video.duration) {
+      thumb.createSpan({ text: formatDuration(video.duration), cls: "vl-list-duration" });
+    }
+
+    const main = row.createDiv({ cls: "vl-list-main" });
+    main.createDiv({ text: video.title || t("misc.untitled"), cls: "vl-list-title" });
+    const meta = main.createDiv({ cls: "vl-list-meta" });
+    const category = this.plugin.getCategory(video.categoryId);
+    const categoryEl = meta.createSpan({ cls: "vl-card-category" });
+    const dot = categoryEl.createSpan({ cls: "vl-category-dot" });
+    dot.setCssStyles({ backgroundColor: category?.color || "var(--text-faint)" });
+    categoryEl.createSpan({ text: this.plugin.categoryName(video.categoryId) });
+    meta.createSpan({ text: providerName(video.provider), cls: "vl-provider-badge" });
+    if (video.author) meta.createSpan({ text: video.author, cls: "vl-card-author" });
+    meta.createSpan({ text: formatDate(video.createdAt), cls: "vl-list-date" });
+    if (video.tags.length > 0) {
+      const tags = main.createDiv({ cls: "vl-list-tags" });
+      for (const tag of video.tags.slice(0, 4)) tags.createSpan({ text: `#${tag}`, cls: "vl-tag" });
+      if (video.tags.length > 4) {
+        tags.createSpan({ text: `+${video.tags.length - 4}`, cls: "vl-tag vl-tag-more" });
+      }
+    }
+
+    const end = row.createDiv({ cls: "vl-list-end" });
+    const actions = end.createDiv({ cls: "vl-list-actions" });
+    iconButton(actions, "play", t("action.play"), () => this.openPlayer(video), "vl-card-action");
+    iconButton(actions, "pencil", t("action.edit"), () => this.openEdit(video), "vl-card-action");
+    if (video.url) {
+      iconButton(
+        actions,
+        "external-link",
+        t("action.openOriginal"),
+        () => openExternal(this.plugin.getVideoPageUrl(video)),
+        "vl-card-action"
+      );
+    }
+    const dragHandle = iconButton(actions, "grip-vertical", t("pin.drag"), () => {}, "vl-card-action vl-card-drag");
+    dragHandle.draggable = true;
+    dragHandle.setAttribute("draggable", "true");
+    dragHandle.addEventListener("dragstart", (event) => this.onCardDragStart(event, "video", video.id, row));
+    dragHandle.addEventListener("dragend", () => this.clearDragState());
+
+    row.addEventListener("dragstart", (event) => this.onCardDragStart(event, "video", video.id, row));
+    row.addEventListener("dragend", () => this.clearDragState());
+    row.addEventListener("dragover", (event) => this.onCardDragOver(event, video, row));
+    row.addEventListener("dragleave", () => row.removeClass("drop-before", "drop-after", "drop-into"));
+    row.addEventListener("drop", (event) => this.onCardDrop(event, video, row));
+
+    row.addEventListener("click", (event) => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+        event.preventDefault();
+        this.toggleSelection("video", video.id, event);
+        return;
+      }
+      this.selectOnly("video", video.id);
+    });
+    row.addEventListener("dblclick", () => this.openPlayer(video));
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.openPlayer(video);
+      } else if (event.key === " ") {
+        event.preventDefault();
+        this.toggleSelection("video", video.id, event);
+      }
+    });
+    row.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      this.ensureContextSelection("video", video.id, event);
+      this.showContextMenu(event, video);
+    });
+
+    this.attachHoverPreview(row, thumb, video);
+  }
+
+  private renderFolderRow(container: HTMLElement, folder: Folder): void {
+    const row = container.createDiv({
+      cls: "vl-list-row vl-list-folder-row",
+      attr: {
+        tabindex: "0",
+        role: "button",
+        "aria-label": folder.name,
+        "data-item-type": "folder",
+        "data-item-id": folder.id
+      }
+    });
+    row.dataset.itemType = "folder";
+    row.dataset.itemId = folder.id;
+    row.draggable = true;
+    row.setAttribute("draggable", "true");
+
+    const check = row.createEl("button", {
+      cls: "vl-card-check",
+      attr: {
+        type: "button",
+        title: t("selection.check"),
+        "aria-label": t("selection.check"),
+        "aria-pressed": "false"
+      }
+    });
+    setIcon(check, "square");
+    check.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.toggleSelection("folder", folder.id, event);
+    });
+
+    const thumb = row.createDiv({ cls: "vl-list-thumb vl-list-folder-thumb" });
+    const icon = thumb.createDiv({ cls: "vl-folder-icon" });
+    setIcon(icon, "folder");
+    if (folder.coverPath) {
+      const img = thumb.createEl("img", {
+        cls: "vl-folder-cover-image is-hidden",
+        attr: { alt: "", loading: "lazy", decoding: "async", draggable: "false" }
+      });
+      void this.plugin.coverStore.getUrl(folder.coverPath).then((url) => {
+        if (!url) return;
+        img.src = url;
+        img.removeClass("is-hidden");
+        icon.addClass("is-hidden");
+      });
+    }
+
+    const total = this.plugin.folderVideosRecursive(folder.id).length;
+    const main = row.createDiv({ cls: "vl-list-main" });
+    main.createDiv({ text: folder.name, cls: "vl-list-title" });
+    const meta = main.createDiv({ cls: "vl-list-meta" });
+    meta.createSpan({ text: t("folder.videoCount", { count: total }) });
+    meta.createSpan({ text: t("folder.folderCount", { count: this.plugin.getSubfolders(folder.id).length }) });
+    if (folder.parentId) {
+      const path = this.plugin.folderPath(folder.parentId).map((entry) => entry.name);
+      if (path.length > 0) meta.createSpan({ text: path.join(" / "), cls: "vl-list-date" });
+    }
+
+    const end = row.createDiv({ cls: "vl-list-end" });
+    const actions = end.createDiv({ cls: "vl-list-actions" });
+    iconButton(actions, "folder-open", t("folder.open"), () => this.openFolder(folder.id), "vl-card-action");
+    iconButton(actions, "image", t("folder.changeCover"), () => this.openFolderCover(folder), "vl-card-action");
+    iconButton(actions, "pencil", t("folder.rename"), () => this.promptRenameFolder(folder.id), "vl-card-action");
+    iconButton(actions, "trash-2", t("action.delete"), () => this.confirmDeleteFolder(folder.id), "vl-card-action");
+    const chevron = end.createSpan({ cls: "vl-list-chevron" });
+    setIcon(chevron, "chevron-right");
+
+    row.addEventListener("dragstart", (event) => this.onCardDragStart(event, "folder", folder.id, row));
+    row.addEventListener("dragend", () => this.clearDragState());
+    row.addEventListener("dragover", (event) => this.onFolderDragOver(event, folder, row));
+    row.addEventListener("dragleave", () => row.removeClass("drop-into"));
+    row.addEventListener("drop", (event) => this.onFolderDrop(event, folder, row));
+
+    row.addEventListener("click", (event) => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+        this.toggleSelection("folder", folder.id, event);
+        return;
+      }
+      this.selectOnly("folder", folder.id);
+    });
+    row.addEventListener("dblclick", () => this.openFolder(folder.id));
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") this.openFolder(folder.id);
+    });
+    row.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      this.ensureContextSelection("folder", folder.id, event);
+      this.showFolderContextMenu(event, folder);
+    });
+  }
+
   private renderFolderCard(grid: HTMLElement, folder: Folder): void {
     const card = grid.createDiv({
       cls: "vl-card vl-folder-card",
@@ -1610,8 +2072,21 @@ export class VideoLibraryView extends ItemView {
 
     const icon = cover.createDiv({ cls: "vl-folder-icon" });
     setIcon(icon, "folder");
+    if (folder.coverPath) {
+      const img = cover.createEl("img", {
+        cls: "vl-folder-cover-image",
+        attr: { alt: "", loading: "lazy", decoding: "async", draggable: "false" }
+      });
+      void this.plugin.coverStore.getUrl(folder.coverPath).then((url) => {
+        if (!url) return;
+        img.src = url;
+        img.removeClass("is-hidden");
+        icon.addClass("is-hidden");
+      });
+      img.addClass("is-hidden");
+    }
     cover.createDiv({
-      text: t("folder.videoCount", { count: this.plugin.folderCount(folder.id) }),
+      text: t("folder.videoCount", { count: this.plugin.folderVideosRecursive(folder.id).length }),
       cls: "vl-folder-video-count"
     });
 
@@ -1622,17 +2097,24 @@ export class VideoLibraryView extends ItemView {
     dragHandle.addEventListener("dragstart", (event) => this.onCardDragStart(event, "folder", folder.id, card));
     dragHandle.addEventListener("dragend", () => this.clearDragState());
     iconButton(actions, "folder-open", t("folder.open"), () => this.openFolder(folder.id), "vl-card-action");
+    iconButton(actions, "image", t("folder.changeCover"), () => this.openFolderCover(folder), "vl-card-action");
     iconButton(actions, "pencil", t("folder.rename"), () => this.promptRenameFolder(folder.id), "vl-card-action");
     iconButton(actions, "trash-2", t("action.delete"), () => this.confirmDeleteFolder(folder.id), "vl-card-action");
 
     const body = card.createDiv({ cls: "vl-card-body" });
     body.createEl("h3", { text: folder.name, cls: "vl-card-title" });
     const meta = body.createDiv({ cls: "vl-card-meta" });
-    meta.createSpan({ text: t("folder.videoCount", { count: this.plugin.folderCount(folder.id) }) });
+    const total = this.plugin.folderVideosRecursive(folder.id).length;
+    meta.createSpan({ text: t("folder.videoCount", { count: total }) });
     meta.createSpan({
       text: t("folder.folderCount", { count: this.plugin.getSubfolders(folder.id).length }),
       cls: "vl-card-author"
     });
+
+    card.draggable = true;
+    card.setAttribute("draggable", "true");
+    card.addEventListener("dragstart", (event) => this.onCardDragStart(event, "folder", folder.id, card));
+    card.addEventListener("dragend", () => this.clearDragState());
 
     card.addEventListener("click", (event) => {
       if (event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -1647,11 +2129,25 @@ export class VideoLibraryView extends ItemView {
     });
     card.addEventListener("contextmenu", (event) => {
       event.preventDefault();
+      this.ensureContextSelection("folder", folder.id, event);
       this.showFolderContextMenu(event, folder);
     });
     card.addEventListener("dragover", (event) => this.onFolderDragOver(event, folder, card));
     card.addEventListener("dragleave", () => card.removeClass("drop-into"));
     card.addEventListener("drop", (event) => this.onFolderDrop(event, folder, card));
+  }
+
+  private openFolderCover(folder: Folder): void {
+    new FolderCoverModal(this.app, this.plugin, folder, () => {
+      this.refresh();
+    }).open();
+  }
+
+  private ensureContextSelection(type: "video" | "folder", id: string, event: MouseEvent): void {
+    const selected = type === "folder" ? this.selectedFolderIds.has(id) : this.selectedIds.has(id);
+    if (!selected || event.ctrlKey || event.metaKey) {
+      this.selectOnly(type, id);
+    }
   }
 
   private showEmptyContextMenu(event: MouseEvent): void {
@@ -1670,20 +2166,46 @@ export class VideoLibraryView extends ItemView {
           .onClick(() => this.promptNewFolder())
       );
     }
+    if (this.selectedIds.size + this.selectedFolderIds.size > 0) {
+      menu.addSeparator();
+      menu.addItem((item) =>
+        item
+          .setTitle(t("folder.moveSelected"))
+          .setIcon("folder-input")
+          .onClick(() => this.openMoveModal())
+      );
+    }
     menu.showAtMouseEvent(event);
   }
 
   private showFolderContextMenu(event: MouseEvent, folder: Folder): void {
     const menu = new Menu();
+    const multi = this.selectedIds.size + this.selectedFolderIds.size > 1;
     menu.addItem((item) =>
       item.setTitle(t("folder.open")).setIcon("folder-open").onClick(() => this.openFolder(folder.id))
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle(t("folder.changeCover"))
+        .setIcon("image")
+        .onClick(() => this.openFolderCover(folder))
     );
     menu.addItem((item) =>
       item.setTitle(t("folder.rename")).setIcon("pencil").onClick(() => this.promptRenameFolder(folder.id))
     );
     menu.addSeparator();
     menu.addItem((item) =>
-      item.setTitle(t("action.delete")).setIcon("trash-2").onClick(() => this.confirmDeleteFolder(folder.id))
+      item
+        .setTitle(t("folder.moveTo"))
+        .setIcon("folder-input")
+        .onClick(() => this.openMoveModal())
+    );
+    menu.addSeparator();
+    menu.addItem((item) =>
+      item
+        .setTitle(multi ? t("selection.delete") : t("action.delete"))
+        .setIcon("trash-2")
+        .onClick(() => (multi ? this.confirmBatchDelete() : this.confirmDeleteFolder(folder.id)))
     );
     menu.showAtMouseEvent(event);
   }
@@ -1702,6 +2224,10 @@ export class VideoLibraryView extends ItemView {
     card.dataset.videoId = video.id;
     card.dataset.itemType = "video";
     card.dataset.itemId = video.id;
+    card.draggable = true;
+    card.setAttribute("draggable", "true");
+    card.addEventListener("dragstart", (event) => this.onCardDragStart(event, "video", video.id, card));
+    card.addEventListener("dragend", () => this.clearDragState());
     const cover = card.createDiv({ cls: "vl-card-cover" });
     const check = cover.createEl("button", {
       cls: "vl-card-check",
@@ -1860,13 +2386,16 @@ export class VideoLibraryView extends ItemView {
     });
     card.addEventListener("contextmenu", (event) => {
       event.preventDefault();
+      this.ensureContextSelection("video", video.id, event);
       this.showContextMenu(event, video);
     });
   }
 
   private showContextMenu(event: MouseEvent, video: VideoItem): void {
     HoverPreview.stopActive();
-    const menu = new Menu();    menu.addItem((item) =>
+    const menu = new Menu();
+    const multi = this.selectedIds.size + this.selectedFolderIds.size > 1;
+    menu.addItem((item) =>
       item
         .setTitle(t("action.play"))
         .setIcon("play")
@@ -1909,9 +2438,16 @@ export class VideoLibraryView extends ItemView {
     menu.addSeparator();
     menu.addItem((item) =>
       item
-        .setTitle(t("action.delete"))
+        .setTitle(multi ? t("folder.moveSelected") : t("folder.moveTo"))
+        .setIcon("folder-input")
+        .onClick(() => this.openMoveModal())
+    );
+    menu.addSeparator();
+    menu.addItem((item) =>
+      item
+        .setTitle(multi ? t("selection.delete") : t("action.delete"))
         .setIcon("trash-2")
-        .onClick(() => this.confirmDelete(video))
+        .onClick(() => (multi ? this.confirmBatchDelete() : this.confirmDelete(video)))
     );
     menu.showAtMouseEvent(event);
   }

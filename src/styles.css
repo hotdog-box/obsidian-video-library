@@ -899,7 +899,7 @@ button.vl-card-action svg {
 .vl-home-hero {
   position: relative;
   display: flex;
-  min-height: 300px;
+  height: clamp(240px, 28vw, 340px);
   overflow: hidden;
   background: linear-gradient(120deg, #2a1b31, #52243b 55%, #b44668);
   border-radius: 14px;
@@ -937,7 +937,9 @@ button.vl-card-action svg {
   flex-direction: column;
   justify-content: flex-end;
   width: min(650px, 75%);
+  max-height: 100%;
   padding: 34px 38px 52px;
+  overflow: hidden;
   color: #fff;
 }
 
@@ -964,12 +966,16 @@ button.vl-card-action svg {
 }
 
 .vl-home-hero-content h2 {
+  display: -webkit-box;
   max-width: 620px;
   margin: 0;
+  overflow: hidden;
   font-size: clamp(24px, 3.4vw, 38px);
   line-height: 1.14;
   color: #fff;
   text-shadow: 0 2px 18px rgb(0 0 0 / 40%);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .vl-home-hero-meta {
@@ -1154,13 +1160,16 @@ button.vl-home-more svg {
 .vl-home-track {
   display: flex;
   gap: 11px;
+  align-items: stretch;
   padding: 2px 1px 8px;
   overflow-x: auto;
   scrollbar-width: thin;
 }
 
 .vl-home-card {
+  display: flex;
   flex: 0 0 176px;
+  flex-direction: column;
   overflow: hidden;
   cursor: pointer;
   background: var(--background-primary);
@@ -1177,12 +1186,14 @@ button.vl-home-more svg {
 
 .vl-home-card-cover {
   position: relative;
+  flex: 0 0 auto;
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: linear-gradient(135deg, #3b2233, #8e3f5a);
 }
 
 .vl-home-card-cover img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1208,7 +1219,17 @@ button.vl-home-more svg {
 }
 
 .vl-home-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 5px;
+  height: 62px;
   padding: 8px 9px 10px;
+  overflow: hidden;
+}
+
+.vl-home-card-body .vl-home-card-meta {
+  margin-top: auto;
 }
 
 .vl-home-card-title {
@@ -3223,4 +3244,646 @@ button.vl-card-check svg {
   .vl-add-button {
     transition: none;
   }
+}
+
+/* ---------- View switch ---------- */
+
+.vl-view-switch {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  height: 32px;
+  padding: 2px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
+}
+
+button.vl-view-switch-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: transparent;
+  background-color: transparent;
+  border: 0;
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+button.vl-view-switch-button:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+button.vl-view-switch-button.is-active {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  background-color: var(--interactive-accent);
+}
+
+button.vl-view-switch-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Folder tree ---------- */
+
+.vl-folder-tree-section {
+  padding-bottom: 8px;
+}
+
+.vl-folder-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.vl-folder-tree-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-s, 5px);
+}
+
+.vl-folder-tree-item:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.vl-folder-tree-item.is-active {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+
+.vl-folder-tree-item.is-active .vl-nav-count {
+  color: var(--text-on-accent);
+  background: rgb(255 255 255 / 20%);
+}
+
+.vl-folder-tree-item.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--interactive-accent);
+}
+
+button.vl-folder-tree-toggle {
+  display: flex;
+  flex: 0 0 14px;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+button.vl-folder-tree-toggle svg {
+  width: 12px;
+  height: 12px;
+}
+
+.vl-folder-tree-spacer {
+  flex: 0 0 14px;
+  width: 14px;
+}
+
+.vl-folder-tree-icon {
+  display: flex;
+  flex: 0 0 13px;
+  color: var(--text-faint);
+}
+
+.vl-folder-tree-item.is-active .vl-folder-tree-icon {
+  color: var(--text-on-accent);
+}
+
+.vl-folder-tree-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.vl-folder-tree-children.is-collapsed {
+  display: none;
+}
+
+/* ---------- Folder covers ---------- */
+
+.vl-folder-cover-image {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vl-folder-cover .vl-folder-video-count,
+.vl-folder-cover .vl-card-check,
+.vl-folder-cover .vl-card-actions {
+  z-index: 3;
+}
+
+.vl-folder-cover-image.is-hidden {
+  display: none;
+}
+
+.vl-folder-cover-modal .vl-folder-cover-editor {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.vl-folder-cover-modal .vl-folder-cover-preview {
+  position: relative;
+  flex: 0 0 260px;
+  width: 260px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 9px;
+}
+
+.vl-folder-cover-modal .vl-folder-cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vl-folder-cover-modal .vl-folder-cover-controls {
+  flex: 1;
+  min-width: 0;
+}
+
+.vl-folder-cover-modal .vl-folder-cover-controls .vl-cover-actions {
+  margin-top: 10px;
+}
+
+/* ---------- List view ---------- */
+
+.vl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vl-list-row {
+  position: relative;
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  padding: 7px 10px 7px 6px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 9px;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.vl-list-row:hover {
+  background: var(--background-secondary);
+  border-color: var(--background-modifier-border-hover, var(--background-modifier-border));
+}
+
+.vl-list-row:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+}
+
+.vl-list-row.is-selected {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+}
+
+.vl-list-row.is-dragging {
+  opacity: 0.42;
+}
+
+.vl-list-row.drop-before {
+  box-shadow: inset 0 2px 0 var(--interactive-accent);
+}
+
+.vl-list-row.drop-after {
+  box-shadow: inset 0 -2px 0 var(--interactive-accent);
+}
+
+.vl-list-row.drop-into {
+  border-color: var(--interactive-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
+}
+
+.vl-list-row button.vl-card-check {
+  position: static;
+  flex: 0 0 auto;
+  opacity: 0;
+}
+
+.vl-list-row:hover button.vl-card-check,
+.vl-list-row.is-selected button.vl-card-check,
+.vl-list-row button.vl-card-check.is-checked {
+  opacity: 1;
+}
+
+.vl-list-thumb {
+  position: relative;
+  flex: 0 0 116px;
+  width: 116px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+
+.vl-list-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vl-list-thumb .vl-card-placeholder svg {
+  width: 20px;
+  height: 20px;
+}
+
+.vl-list-duration {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 2;
+  padding: 1px 4px;
+  font-size: 8px;
+  color: #fff;
+  background: rgb(0 0 0 / 62%);
+  border-radius: 3px;
+}
+
+.vl-list-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.vl-list-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vl-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  align-items: center;
+  margin-top: 3px;
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+.vl-list-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.vl-list-tags .vl-tag {
+  font-size: 8px;
+}
+
+.vl-list-date {
+  color: var(--text-faint);
+}
+
+.vl-list-end {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  align-items: center;
+}
+
+.vl-list-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.vl-list-row:hover .vl-list-actions,
+.vl-list-row.is-selected .vl-list-actions {
+  opacity: 1;
+}
+
+.vl-list-actions button.vl-card-action {
+  width: 25px;
+  height: 25px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  background-color: var(--background-secondary);
+  border-color: var(--background-modifier-border);
+  opacity: 1;
+  transform: none;
+}
+
+.vl-list-actions button.vl-card-action:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+  background-color: var(--background-modifier-hover);
+}
+
+.vl-list-actions button.vl-card-action svg {
+  filter: none;
+}
+
+.vl-list-chevron {
+  display: flex;
+  color: var(--text-faint);
+}
+
+.vl-list-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+.vl-list-folder-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--interactive-accent) 20%, var(--background-secondary)), var(--background-secondary));
+}
+
+.vl-list-folder-thumb .vl-folder-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.vl-list-folder-thumb .vl-folder-cover-image {
+  z-index: 1;
+}
+
+.vl-list-folder-row .vl-list-title {
+  font-weight: 700;
+}
+
+/* ---------- Player timeline ---------- */
+
+.vl-player-frame {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vl-player-frame .vl-native-video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+
+.vl-player-controls {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 26px 12px 9px;
+  background: linear-gradient(transparent, rgb(0 0 0 / 82%));
+}
+
+button.vl-player-control {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: #fff;
+  cursor: pointer;
+  background: transparent;
+  background-color: transparent;
+  border: 0;
+  border-radius: 5px;
+  box-shadow: none;
+  opacity: 0.88;
+}
+
+button.vl-player-control:hover {
+  background: rgb(255 255 255 / 16%);
+  background-color: rgb(255 255 255 / 16%);
+  opacity: 1;
+}
+
+button.vl-player-control svg {
+  width: 17px;
+  height: 17px;
+}
+
+.vl-player-time {
+  flex: 0 0 auto;
+  min-width: 36px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: rgb(255 255 255 / 78%);
+  text-align: center;
+}
+
+.vl-player-timeline {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  min-width: 60px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.vl-player-timeline::before {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 4px;
+  margin-top: -2px;
+  content: "";
+  background: rgb(255 255 255 / 26%);
+  border-radius: 3px;
+}
+
+.vl-player-buffer,
+.vl-player-progress {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 4px;
+  margin-top: -2px;
+  pointer-events: none;
+  border-radius: 3px;
+}
+
+.vl-player-buffer {
+  background: rgb(255 255 255 / 38%);
+}
+
+.vl-player-progress {
+  background: #fb7299;
+}
+
+.vl-player-thumb {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  margin-left: -5px;
+  pointer-events: none;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+}
+
+.vl-player-thumb.is-hidden {
+  display: none;
+}
+
+.vl-player-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+button.vl-player-marker {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  margin-top: -4px;
+  margin-left: -4px;
+  pointer-events: auto;
+  cursor: pointer;
+  background: #ffd166;
+  border: 1px solid rgb(0 0 0 / 45%);
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 40%);
+  transform: rotate(45deg);
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+button.vl-player-marker:hover {
+  background: #ffe39a;
+  transform: rotate(45deg) scale(1.35);
+}
+
+.vl-player-volume {
+  flex: 0 1 70px;
+  width: 70px;
+  min-width: 40px;
+  accent-color: #fb7299;
+}
+
+.vl-player-error {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  background: rgb(0 0 0 / 72%);
+}
+
+.vl-player-error-icon {
+  display: flex;
+  color: #ffd166;
+}
+
+.vl-player-error-icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.vl-player-error p {
+  max-width: 380px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgb(255 255 255 / 82%);
+}
+
+.vl-player-error button {
+  font-size: 11px;
+}
+
+/* ---------- Preview settings audio ---------- */
+
+.vl-frame-volume {
+  flex: 0 1 80px;
+  width: 80px;
+  min-width: 44px;
+  accent-color: var(--interactive-accent);
+}
+
+button.vl-frame-audio-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+
+button.vl-frame-audio-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 760px) {
+  .vl-folder-cover-modal .vl-folder-cover-editor {
+    flex-direction: column;
+  }
+
+  .vl-folder-cover-modal .vl-folder-cover-preview {
+    flex: none;
+    width: 100%;
+  }
+
+  .vl-list-thumb {
+    flex-basis: 84px;
+    width: 84px;
+  }
+
+  .vl-list-date {
+    display: none;
+  }
+}
+
+.vl-folder-cover-modal .is-hidden {
+  display: none;
+}
+
+.vl-list-row.is-marquee-hit {
+  background: color-mix(in srgb, var(--interactive-accent) 12%, var(--background-primary));
 }

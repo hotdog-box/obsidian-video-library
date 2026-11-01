@@ -95,6 +95,17 @@ export class CoverStore {
     }
   }
 
+  async read(path: string | undefined): Promise<{ buffer: ArrayBuffer; extension: string } | null> {
+    if (!path) return null;
+    try {
+      const buffer = await this.app.vault.adapter.readBinary(normalizePath(path));
+      const extension = path.split(".").pop()?.toLowerCase() || "jpg";
+      return { buffer, extension: IMAGE_TYPES[extension] ? extension : "jpg" };
+    } catch {
+      return null;
+    }
+  }
+
   previewBuffer(buffer: ArrayBuffer, extension = "jpg"): string {
     const blob = new Blob([buffer], { type: IMAGE_TYPES[extension] || "image/jpeg" });
     return URL.createObjectURL(blob);

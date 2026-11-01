@@ -6,6 +6,8 @@ export type SortMode = "newest" | "oldest" | "title-asc" | "title-desc" | "manua
 
 export type CardSize = "small" | "medium" | "large";
 
+export type ViewMode = "grid" | "list";
+
 export type TagMatchMode = "any" | "all";
 
 export const DATA_VERSION = 3;
@@ -23,6 +25,7 @@ export interface Folder {
   id: string;
   name: string;
   parentId: string | null;
+  coverPath?: string;
   createdAt: number;
   sortOrder?: number;
 }
@@ -122,6 +125,7 @@ export interface PluginSettings {
   language: LanguageSetting;
   sort: SortMode;
   cardSize: CardSize;
+  viewMode: ViewMode;
   previewMuted: boolean;
   previewVolume: number;
   tagMatchMode: TagMatchMode;
@@ -164,6 +168,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   language: "auto",
   sort: "newest",
   cardSize: "medium",
+  viewMode: "grid",
   previewMuted: true,
   previewVolume: 0.8,
   tagMatchMode: "any",

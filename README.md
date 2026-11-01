@@ -9,8 +9,10 @@
 Video Library is a desktop-only Obsidian plugin for collecting, organizing and watching video links and local video files in one cover grid.
 
 - Import Bilibili, YouTube, Vimeo, direct video URLs and generic web pages, with automatic title, author, duration and cover detection.
-- Add videos from inside the vault or from any folder on the computer; multi-file import and whole-folder import preserve subfolders.
-- Organize with nested folders, breadcrumbs, tags with Any/All filtering, favorites, pinned videos, manual drag ordering and custom categories.
+- Add videos from inside the vault or from any folder on the computer; multi-file import and whole-folder import preserve subfolders, and folder import creates categories from the folder names.
+- The player has a custom timeline with hover-preview clip markers, so preview clips become one-click jump points.
+- Organize with nested folders, a collapsible folder tree, breadcrumbs, tags with Any/All filtering, favorites, pinned videos, manual drag ordering and custom categories.
+- Switch between a cover grid and a compact list, set custom folder covers, and delete a folder together with its contents when you confirm it.
 - Windows Explorer-style selection: single-click selects, double-click opens, Ctrl/Cmd toggles, Shift extends, and dragging selected items moves them.
 - A Bilibili-style Home view with a six-item recent/played carousel, pinned picks, recent additions, favorites, local videos and category rows.
 - Optional deletion of the local source file, only after an explicit confirmation checkbox.
@@ -21,8 +23,8 @@ See the Chinese sections below for the complete feature list and usage notes.
 
 ---
 
-> 当前版本：`0.5.2`  
-> 已在 Obsidian `1.14.5`（Windows 桌面版）实际测试通过。  
+> 当前版本：`0.6.0`
+> 已在 Obsidian `1.14.5`（Windows 桌面版）实际测试通过。
 > 插件类型：仅桌面端。
 
 ---
@@ -52,7 +54,7 @@ See the Chinese sections below for the complete feature list and usage notes.
   - 内嵌播放
   - 保存后自动从视频中截取封面
 - **浏览与整理**
-  - 封面网格、卡片大小切换
+  - 封面网格与列表两种显示模式，可一键切换；封面网格支持卡片大小切换
   - 本地/直链视频悬停时静音预览；可设置预览总时长，并选择多个片段按顺序拼接，超出总时长即从头循环
   - 预览时可点按钮切换静音/取消静音，并拖动滑块调节音量；会自动记住上次选择
   - 标题 / 标签 / 作者 / 备注搜索
@@ -62,16 +64,18 @@ See the Chinese sections below for the complete feature list and usage notes.
   - 仿 B 站电影主页的“首页”：大图轮播推荐、置顶推荐、最近添加、收藏、本地视频和分类横向卡片
   - 首页轮播优先展示最近播放的 6 个视频，自动轮换，可用圆点和左右箭头切换
   - 本地视频支持仓库内文件和仓库外文件；仓库外文件直接引用绝对路径，不复制进仓库
-  - 仓库外视频支持单文件选择、多选批量导入、整个文件夹导入；文件夹导入会保留子文件夹结构
+  - 仓库外视频支持单文件选择、多选批量导入、整个文件夹导入；文件夹导入会保留子文件夹结构，并按根文件夹和每个一级子文件夹自动创建分类
   - 仓库外视频会在插件目录的 `external-links/` 建立硬链接供播放；跨盘无法硬链接时自动复制一份播放缓存
   - 删除本地视频时可勾选“同时删除本地视频文件”，文件会移到系统回收站；批量删除也支持
   - 选择逻辑参考 Windows 11：单击选中，双击打开；Ctrl/Cmd 切换选中，Shift 连选
   - 多选：卡片复选框、Ctrl/Cmd 多选、Shift 连选；在视频区域任意位置拖动即可框选，四个方向都可以
   - 框选默认切换选中状态，重复框同一批会取消；Shift 只加选，Ctrl 只减选
-  - 文件夹：全部视频中可新建、重命名、删除文件夹，支持嵌套子文件夹
-  - 拖动视频或文件夹到文件夹卡片上即可移动，多选后可一起拖动
-  - 拖到顶部面包屑可移动到上一层/指定层；拖动卡片上的手柄可在当前文件夹内排序
-  - 文件夹删除时只删除文件夹本身，里面的视频和子文件夹移到上一层
+  - 文件夹：全部视频中可新建、重命名、删除、修改封面，支持嵌套子文件夹
+  - 侧边栏文件夹树按层级展开，可折叠，点击任意层级直接跳转
+  - 拖动视频或文件夹到文件夹卡片上即可移动，多选后可一起拖动；拖到另一张视频卡片可同时移动并调整顺序
+  - 拖到顶部面包屑或侧边栏文件夹树可移动到指定层级；拖动卡片上的手柄可在当前文件夹内排序
+  - 选中项目后右键可选择“移动到文件夹…”，在弹窗中搜索并选择目标位置
+  - 删除文件夹时会连同其中的所有视频和子文件夹一起从视频库删除；可勾选同时删除原始视频文件
   - 在文件夹内点击“添加视频”，新视频会自动放进当前文件夹
   - 批量操作栏固定在顶部：全选/反选、批量改分类、批量收藏、批量置顶、批量查找替换重命名、批量删除
   - 置顶区在列表顶部，可折叠/展开、可拖动排序
@@ -80,7 +84,10 @@ See the Chinese sections below for the complete feature list and usage notes.
   - 按添加时间、标题或手动顺序排序
   - 分类支持右键重命名/删除，侧边栏拖动可排序
   - 列表和首页空白处右键可直接添加视频；列表空白处还可新建文件夹
-  - 右键菜单：播放、编辑、置顶、打开原网页、复制链接、删除；文件夹可打开、重命名、删除
+  - 内置播放器带完整进度条、缓冲进度、音量、全屏和播放/暂停控制；本地文件时长异常时进度条仍可拖动
+  - 设置了悬停预览的视频，会在播放进度条上显示可点击的菱形节点，点击直接跳到对应片段起点
+  - 悬停预览设置里的播放按钮可听到声音，并提供音量滑块和静音按钮
+  - 右键菜单：播放、编辑、置顶、打开原网页、复制链接、移动到文件夹、删除；文件夹可打开、改封面、重命名、移动、删除
   - 中英双语界面，可跟随 Obsidian 语言
 - **数据持久化**
   - 视频、分类、文件夹、标签、设置保存在插件的 `data.json`

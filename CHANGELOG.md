@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 — 2026-11-01
+
+- Importing a whole folder now creates categories from the root folder and each top-level subfolder automatically.
+- Unify Home cover sizes: the hero has a fixed height and every recent card uses a 16:9 cover with equal body height.
+- Add a custom player timeline for local and direct videos, with play/pause, buffered range, seek, volume and fullscreen controls. The timeline stays visible even when a file reports an unknown or infinite duration.
+- Show hover-preview clips as clickable diamond nodes on the player timeline; clicking a node jumps to that clip's start time.
+- Folder covers can now be set from a local image, image URL, the first video cover in the folder, or removed.
+- Deleting a folder now deletes its videos and subfolders as well, with an optional checkbox to delete the original local video files.
+- Improve moving: drag any selected video or folder onto another folder, another video, a breadcrumb or the folder tree. Right-click a selection to open “Move to folder…”.
+- Add a list view alongside the thumbnail grid, plus a collapsible folder tree in the sidebar for quick hierarchy navigation.
+- Hover-preview settings now play audio while scrubbing; the preview player starts unmuted with a volume slider and mute button.
+- Skip rebuilding the external playback cache when the cached hard link or copy already matches the source size, avoiding a full re-copy of large libraries on every launch.
+
 ## 0.5.2 — 2026-10-31
 
 - Adopt Obsidian's declarative settings API with `getSettingDefinitions()`.

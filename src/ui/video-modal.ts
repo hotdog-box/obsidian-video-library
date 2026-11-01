@@ -262,14 +262,15 @@ export class VideoEditModal extends Modal {
     void this.pickExternalPaths("folder").then(async (paths) => {
       const folderPath = paths[0];
       if (!folderPath) return;
-      const result = await this.plugin.importExternalFolder(
-        folderPath,
-        this.folderId || null,
-        this.categorySelect.value || UNCATEGORIZED_ID
-      );
+      const result = await this.plugin.importExternalFolder(folderPath, this.folderId || null);
       new Notice(
         result.imported > 0
-          ? t("notice.importedFolder", { count: result.imported, folders: result.folders, skipped: result.skipped })
+          ? t("notice.importedFolder", {
+              count: result.imported,
+              folders: result.folders,
+              categories: result.categories,
+              skipped: result.skipped
+            })
           : t("notice.importEmpty")
       );
       if (result.imported > 0) this.close();

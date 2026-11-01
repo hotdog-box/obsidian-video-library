@@ -20,6 +20,8 @@ export class PreviewConfigModal extends Modal {
   private statusEl!: HTMLElement;
   private saveButton!: HTMLButtonElement;
   private playButton!: HTMLButtonElement;
+  private muteButton!: HTMLButtonElement;
+  private volumeInput!: HTMLInputElement;
   private clips: PreviewClip[];
   private duration = DEFAULT_PREVIEW_DURATION;
   private videoDuration = 0;
@@ -76,7 +78,8 @@ export class PreviewConfigModal extends Modal {
       cls: "vl-frame-video",
       attr: { preload: "auto", playsinline: "true" }
     });
-    this.video.muted = true;
+    this.video.muted = false;
+    this.video.volume = 0.8;
     this.video.src = this.source;
 
     const timeline = this.contentEl.createDiv({ cls: "vl-frame-timeline" });
@@ -89,6 +92,28 @@ export class PreviewConfigModal extends Modal {
 
     const buttons = this.contentEl.createDiv({ cls: "vl-frame-buttons" });
     this.playButton = buttons.createEl("button", { text: t("form.framePlay"), attr: { type: "button" } });
+    this.muteButton = buttons.createEl("button", {
+      cls: "vl-frame-audio-button",
+      attr: { type: "button", title: t("player.mute"), "aria-label": t("player.mute") }
+    });
+    setIcon(this.muteButton, "volume-2");
+    this.muteButton.addEventListener("click", () => {
+      this.video.muted = !this.video.muted;
+      if (!this.video.muted && this.video.volume === 0) this.video.volume = 0.8;
+      this.updateAudioUi();
+    });
+    this.volumeInput = timeline.createEl("input", {
+      type: "range",
+      cls: "vl-frame-volume",
+      attr: { min: "0", max: "1", step: "0.01", "aria-label": t("player.volume") }
+    });
+    this.volumeInput.value = String(this.video.volume);
+    this.volumeInput.addEventListener("input", () => {
+      const volume = Math.min(1, Math.max(0, Number(this.volumeInput.value) || 0));
+      this.video.volume = volume;
+      this.video.muted = volume <= 0;
+      this.updateAudioUi();
+    });
     const setStart = buttons.createEl("button", { text: t("preview.setStart"), attr: { type: "button" } });
     const setEnd = buttons.createEl("button", { text: t("preview.setEnd"), attr: { type: "button" } });
 
@@ -139,7 +164,11 @@ export class PreviewConfigModal extends Modal {
       if (this.videoDuration === 0) this.nudgeDuration();
     });
     this.video.addEventListener("timeupdate", () => this.syncTime());
-    this.video.addEventListener("play", () => this.playButton.setText(t("form.framePause")));
+    this.video.addEventListener("volumechange", () => this.updateAudioUi());
+    this.video.addEventListener("play", () => {
+      this.playButton.setText(t("form.framePause"));
+      this.updateAudioUi();
+    });
     this.video.addEventListener("pause", () => this.playButton.setText(t("form.framePlay")));
     this.video.addEventListener("error", () => {
       this.statusEl.setText(t("form.frameLoadFailed"));
@@ -147,6 +176,7 @@ export class PreviewConfigModal extends Modal {
       this.saveButton.disabled = true;
     });
 
+    this.updateAudioUi();
     this.renderClips();
   }
 
@@ -204,6 +234,7 @@ export class PreviewConfigModal extends Modal {
 
   private async togglePlay(): Promise<void> {
     if (this.video.paused) {
+      if (this.video.muted && this.video.volume > 0) this.video.muted = false;
       try {
         await this.video.play();
       } catch {
@@ -211,6 +242,19 @@ export class PreviewConfigModal extends Modal {
       }
     } else {
       this.video.pause();
+    }
+    this.updateAudioUi();
+  }
+
+  private updateAudioUi(): void {
+    if (!this.muteButton) return;
+    const muted = this.video.muted || this.video.volume <= 0;
+    setIcon(this.muteButton, muted ? "volume-x" : this.video.volume < 0.5 ? "volume-1" : "volume-2");
+    const label = muted ? t("player.unmute") : t("player.mute");
+    this.muteButton.setAttribute("aria-label", label);
+    this.muteButton.setAttribute("title", label);
+    if (this.volumeInput && document.activeElement !== this.volumeInput) {
+      this.volumeInput.value = String(this.video.volume);
     }
   }
 

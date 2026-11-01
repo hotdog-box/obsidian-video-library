@@ -109,10 +109,10 @@ export class ScrapeModal extends Modal {
     this.resultsEl.empty();
     this.previewEl.empty();
     this.searchButton.disabled = true;
-    this.statusEl.setText(t("scrape.searching"));
+    const site = this.plugin.getMarker(this.providerSelect.value);
+    this.statusEl.setText(t(site?.metatubeProvider ? "scrape.searching" : "scrape.searchingAll"));
     try {
       const client = this.plugin.metaTubeClient();
-      const site = this.plugin.getMarker(this.providerSelect.value);
       this.results = await client.search(query, site?.metatubeProvider);
       if (this.results.length === 0) {
         this.statusEl.setText(t("scrape.noResults"));

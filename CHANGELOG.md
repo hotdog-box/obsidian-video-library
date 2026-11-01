@@ -9,7 +9,11 @@
 - Allow the search box to search the whole library across categories and folders.
 - Add an undo button and Ctrl+Z for library actions (up to 30 steps).
 - Make player tags, series and performers clickable to show related videos; configurable in settings, 10 shown initially with a show-all button.
-- Add click-press feedback to settings buttons and rows.
+- Turn settings actions into visible icon buttons with a clear press animation, and fix the bug where clicking a site button also animated the entire settings row.
+- Fix “Import sites” so it opens a file picker from the settings window itself instead of creating a hidden input in the wrong document; add “Export sites” with a dated JSON file.
+- Show a dedicated empty state when no scraping sites are configured, and keep the current site list as a local import template instead of shipping presets.
+- Remove placeholder hints from the new-site dialog and drop the “欧美” capability option.
+- Add `项目架构与修改指南.md` and `AI技术交接报告.skill.md` for future maintainers and AI agents.
 - Treat MetaTube 404 as “no results” and raise the search timeout so all-provider searches do not fail prematurely.
 - Add a manual “Scrape metadata” flow in the player and video context menu: search, choose a candidate, review the field diff, and apply cover, author, studio, series, performers, tags, description, release date and duration.
 - Add marker management and four new editable fields: author, release date, description and markers. The video edit form also shows and manages markers.

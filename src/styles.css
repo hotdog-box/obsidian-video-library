@@ -4538,20 +4538,26 @@ button.vl-settings-site-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 5px;
-  font-size: 11px;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
   color: var(--text-muted);
   cursor: pointer;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  box-shadow: none;
+  border-radius: 5px;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
+}
+
+button.vl-settings-site-action svg {
+  width: 13px;
+  height: 13px;
 }
 
 button.vl-settings-site-action:hover {
   color: var(--text-normal);
+  background: var(--background-modifier-hover);
   border-color: var(--interactive-accent);
 }
 
@@ -4575,14 +4581,123 @@ button.vl-settings-site-action.is-danger:hover {
 
 .vl-settings-sites-footer {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
 }
 
-.vl-settings-sites-footer button {
-  height: 28px;
-  padding: 0 9px;
+button.vl-settings-footer-btn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 29px;
+  padding: 0 10px;
   font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 6%);
+}
+
+button.vl-settings-footer-btn:hover:not(:disabled) {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+button.vl-settings-footer-btn.is-primary {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+}
+
+button.vl-settings-footer-btn:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.vl-settings-sites-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  padding: 18px 14px;
+  text-align: center;
+  background: var(--background-secondary);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 8px;
+}
+
+.vl-settings-sites-empty-icon {
+  display: flex;
+  color: var(--text-faint);
+}
+
+.vl-settings-sites-empty-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.vl-settings-sites-empty-title {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.vl-settings-sites-empty-desc {
+  max-width: 390px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
+/* ---------- Settings action buttons ---------- */
+
+.vl-settings-action-row .setting-item-control {
+  flex-shrink: 0;
+}
+
+button.vl-settings-action {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 11px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 6%);
+}
+
+button.vl-settings-action:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+button.vl-settings-action.is-primary {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+}
+
+.vl-settings-action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vl-settings-action-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .vl-marker-capabilities {
@@ -4759,27 +4874,23 @@ button.vl-player-related-more {
 /* ---------- Click feedback ---------- */
 
 .mod-settings button,
-.mod-settings .setting-item,
 .vl-root button,
 .vl-marker-modal button,
 .vl-scrape-modal button,
 .vl-player-modal button {
-  transition: transform 80ms ease, opacity 80ms ease, background-color 120ms ease, border-color 120ms ease;
+  transition: transform 70ms ease, opacity 70ms ease, background-color 120ms ease,
+    border-color 120ms ease, box-shadow 70ms ease;
 }
 
-.mod-settings button:active,
-.vl-settings-sites button:active,
-.vl-root button:active,
-.vl-marker-modal button:active,
-.vl-scrape-modal button:active,
-.vl-player-modal button:active {
-  transform: scale(0.96);
-  opacity: 0.82;
-}
-
-.mod-settings .setting-item:active {
-  transform: scale(0.995);
-  opacity: 0.9;
+.mod-settings button:active:not(:disabled),
+.vl-settings-sites button:active:not(:disabled),
+.vl-root button:active:not(:disabled),
+.vl-marker-modal button:active:not(:disabled),
+.vl-scrape-modal button:active:not(:disabled),
+.vl-player-modal button:active:not(:disabled) {
+  transform: scale(0.9);
+  opacity: 0.74;
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 28%);
 }
 
 button.vl-toolbar-undo {

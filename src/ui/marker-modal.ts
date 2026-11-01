@@ -133,7 +133,7 @@ export class MarkerEditModal extends Modal {
     this.nameInput = nameField.createEl("input", {
       type: "text",
       cls: "vl-text-input",
-      attr: { value: this.marker?.name || "", placeholder: t("marker.namePlaceholder") }
+      attr: { value: this.marker?.name || "" }
     });
 
     const colorField = this.contentEl.createDiv({ cls: "vl-field" });
@@ -169,10 +169,7 @@ export class MarkerEditModal extends Modal {
       this.urlInput = urlField.createEl("input", {
         type: "text",
         cls: "vl-text-input",
-        attr: {
-          value: this.marker?.url || "",
-          placeholder: "https://www.javbus.com"
-        }
+        attr: { value: this.marker?.url || "" }
       });
 
       const metatubeField = this.contentEl.createDiv({ cls: "vl-field" });
@@ -180,17 +177,14 @@ export class MarkerEditModal extends Modal {
       this.metatubeInput = metatubeField.createEl("input", {
         type: "text",
         cls: "vl-text-input",
-        attr: {
-          value: this.marker?.metatubeProvider || "",
-          placeholder: t("marker.metatubePlaceholder")
-        }
+        attr: { value: this.marker?.metatubeProvider || "" }
       });
       metatubeField.createDiv({ text: t("marker.metatubeHint"), cls: "vl-field-hint" });
 
       const capabilityField = this.contentEl.createDiv({ cls: "vl-field" });
       capabilityField.createEl("label", { text: t("marker.capabilities"), cls: "vl-field-label" });
       const capabilityRow = capabilityField.createDiv({ cls: "vl-marker-capabilities" });
-      this.capabilityChecks = ["有码", "无码", "欧美"].map((name) => {
+      this.capabilityChecks = ["有码", "无码"].map((name) => {
         const label = capabilityRow.createEl("label");
         const input = label.createEl("input", { type: "checkbox" });
         input.checked = Boolean(this.marker?.capabilities?.includes(name));
@@ -202,7 +196,7 @@ export class MarkerEditModal extends Modal {
       descriptionField.createEl("label", { text: t("marker.siteDescription"), cls: "vl-field-label" });
       this.descriptionInput = descriptionField.createEl("textarea", {
         cls: "vl-text-area",
-        attr: { rows: "2", placeholder: t("marker.siteDescriptionPlaceholder") }
+        attr: { rows: "2" }
       });
       this.descriptionInput.value = this.marker?.description || "";
 

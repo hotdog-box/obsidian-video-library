@@ -57,8 +57,10 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
           {
             name: t("settings.open"),
             desc: t("settings.openDesc"),
-            action: () => {
-              void this.plugin.openView();
+            render: (setting: Setting) => {
+              this.renderAction(setting, "book-open", t("settings.open"), () => {
+                void this.plugin.openView();
+              }, true);
             }
           },
           {
@@ -68,18 +70,22 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
           {
             name: t("settings.openDataFolder"),
             desc: t("settings.openDataFolderDesc"),
-            action: () => {
-              void this.plugin.openPluginFolder("data").then((ok) => {
-                if (!ok) new Notice(t("settings.openFolderFailed"));
+            render: (setting: Setting) => {
+              this.renderAction(setting, "folder-open", t("settings.openDataFolder"), () => {
+                void this.plugin.openPluginFolder("data").then((ok) => {
+                  if (!ok) new Notice(t("settings.openFolderFailed"));
+                });
               });
             }
           },
           {
             name: t("settings.openCoversFolder"),
             desc: t("settings.openCoversFolderDesc"),
-            action: () => {
-              void this.plugin.openPluginFolder("covers").then((ok) => {
-                if (!ok) new Notice(t("settings.openFolderFailed"));
+            render: (setting: Setting) => {
+              this.renderAction(setting, "image", t("settings.openCoversFolder"), () => {
+                void this.plugin.openPluginFolder("covers").then((ok) => {
+                  if (!ok) new Notice(t("settings.openFolderFailed"));
+                });
               });
             }
           },
@@ -126,24 +132,28 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
           {
             name: t("scrape.startServer"),
             desc: t("scrape.startServerDesc"),
-            action: () => {
-              void this.plugin.startMetaTubeServer().then((result) => {
-                new Notice(
-                  result.ok
-                    ? t(result.started ? "scrape.serverStarted" : "scrape.serverAlreadyRunning")
-                    : t("scrape.connectionFailed", { error: result.error || "" })
-                );
-                this.update();
-              });
+            render: (setting: Setting) => {
+              this.renderAction(setting, "play", t("scrape.startServer"), () => {
+                void this.plugin.startMetaTubeServer().then((result) => {
+                  new Notice(
+                    result.ok
+                      ? t(result.started ? "scrape.serverStarted" : "scrape.serverAlreadyRunning")
+                      : t("scrape.connectionFailed", { error: result.error || "" })
+                  );
+                  this.update();
+                });
+              }, true);
             }
           },
           {
             name: t("scrape.stopServer"),
             desc: t("scrape.stopServerDesc"),
-            action: () => {
-              void this.plugin.stopMetaTubeServer().then(() => {
-                new Notice(t("scrape.serverStopped"));
-                this.update();
+            render: (setting: Setting) => {
+              this.renderAction(setting, "square", t("scrape.stopServer"), () => {
+                void this.plugin.stopMetaTubeServer().then(() => {
+                  new Notice(t("scrape.serverStopped"));
+                  this.update();
+                });
               });
             }
           },
@@ -179,13 +189,15 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
           {
             name: t("scrape.testConnection"),
             desc: t("scrape.testConnectionDesc"),
-            action: () => {
-              void this.plugin.testMetaTube().then((result) => {
-                new Notice(
-                  result.ok
-                    ? t("scrape.connectionOk", { count: result.count || 0 })
-                    : t("scrape.connectionFailed", { error: result.error || "" })
-                );
+            render: (setting: Setting) => {
+              this.renderAction(setting, "plug-zap", t("scrape.testConnection"), () => {
+                void this.plugin.testMetaTube().then((result) => {
+                  new Notice(
+                    result.ok
+                      ? t("scrape.connectionOk", { count: result.count || 0 })
+                      : t("scrape.connectionFailed", { error: result.error || "" })
+                  );
+                });
               });
             }
           }
@@ -202,64 +214,176 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     const sites = this.plugin.scrapeSites();
     const enabled = sites.filter((site) => site.enabled !== false).length;
     const head = wrap.createDiv({ cls: "vl-settings-sites-head" });
-    head.createSpan({ text: t("scrape.enabledSites", { enabled, total: sites.length }) });
+    head.createSpan({
+      text:
+        sites.length > 0
+          ? t("scrape.enabledSites", { enabled, total: sites.length })
+          : t("scrape.sitesNotConfigured")
+    });
 
     const list = wrap.createDiv({ cls: "vl-settings-site-list" });
+    if (sites.length === 0) {
+      const empty = list.createDiv({ cls: "vl-settings-sites-empty" });
+      const emptyIcon = empty.createDiv({ cls: "vl-settings-sites-empty-icon" });
+      setIcon(emptyIcon, "globe-2");
+      empty.createDiv({ cls: "vl-settings-sites-empty-title", text: t("scrape.noSites") });
+      empty.createDiv({ cls: "vl-settings-sites-empty-desc", text: t("scrape.noSitesDesc") });
+    }
     for (const site of sites) {
       this.renderSiteRow(list, site);
     }
 
     const footer = wrap.createDiv({ cls: "vl-settings-sites-footer" });
-    const add = footer.createEl("button", { text: t("scrape.addSite"), attr: { type: "button" } });
-    add.addEventListener("click", () => {
+    this.footerButton(footer, "plus", t("scrape.addSite"), () => {
       new MarkerEditModal(this.app, this.plugin, null, () => this.update(), "site").open();
+    }, sites.length === 0);
+    this.footerButton(footer, "upload", t("scrape.importSites"), () => this.pickSiteFile());
+    this.footerButton(footer, "download", t("scrape.exportSites"), () => this.exportSites(sites), false, sites.length === 0);
+    if (sites.length > 0) {
+      this.footerButton(footer, "plug-zap", t("scrape.testEnabledSites"), (button) => {
+        button.disabled = true;
+        void Promise.all(
+          sites
+            .filter((site) => site.enabled !== false)
+            .map((site) => this.plugin.testScrapeSite(site))
+        ).then((results) => {
+          const ok = results.filter((result) => result.ok).length;
+          const failed = results.length - ok;
+          new Notice(
+            failed === 0
+              ? t("scrape.allSitesOk", { count: ok })
+              : t("scrape.allSitesPartial", { ok, failed })
+          );
+          button.disabled = false;
+        });
+      });
+    }
+  }
+
+  private renderAction(
+    setting: Setting,
+    icon: string,
+    label: string,
+    onClick: () => void,
+    primary = false
+  ): void {
+    setting.settingEl.addClass("vl-settings-action-row");
+    setting.controlEl.empty();
+    const button = setting.controlEl.createEl("button", {
+      cls: `vl-settings-action${primary ? " is-primary" : ""}`,
+      attr: { type: "button", "aria-label": label, title: label }
     });
-    const importSites = footer.createEl("button", {
-      text: t("scrape.importSites"),
+    const iconEl = button.createSpan({ cls: "vl-settings-action-icon" });
+    setIcon(iconEl, icon);
+    button.createSpan({ cls: "vl-settings-action-label", text: label });
+    button.addEventListener("click", onClick);
+  }
+
+  private footerButton(
+    parent: HTMLElement,
+    icon: string,
+    label: string,
+    onClick: (button: HTMLButtonElement) => void,
+    primary = false,
+    disabled = false
+  ): HTMLButtonElement {
+    const button = parent.createEl("button", {
+      cls: `vl-settings-footer-btn${primary ? " is-primary" : ""}`,
       attr: { type: "button" }
     });
-    importSites.addEventListener("click", () => {
-      const input = document.body.createEl("input", {
-        attr: { type: "file", accept: ".json,application/json" }
-      });
-      input.setCssStyles({ display: "none" });
-      input.addEventListener("change", () => {
+    const iconEl = button.createSpan({ cls: "vl-btn-icon" });
+    setIcon(iconEl, icon);
+    button.createSpan({ text: label });
+    button.disabled = disabled;
+    button.addEventListener("click", () => onClick(button));
+    return button;
+  }
+
+  private pickSiteFile(): void {
+    const doc = this.containerEl.ownerDocument;
+    const win = doc.defaultView;
+    const input = doc.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.style.position = "fixed";
+    input.style.left = "-10000px";
+    input.style.top = "0";
+    input.style.width = "1px";
+    input.style.height = "1px";
+    input.style.opacity = "0";
+    doc.body.appendChild(input);
+
+    let handled = false;
+    const cleanup = (): void => {
+      if (handled) return;
+      handled = true;
+      input.remove();
+    };
+
+    input.addEventListener(
+      "change",
+      () => {
         const file = input.files?.[0];
-        input.remove();
+        cleanup();
         if (!file) return;
         void file
           .text()
-          .then((text) => JSON.parse(text) as unknown)
+          .then((text) => JSON.parse(text.replace(/^\uFEFF/, "")) as unknown)
           .then((payload) => this.plugin.importScrapeSites(payload))
           .then((count) => {
+            if (count === 0) {
+              new Notice(t("scrape.noSitesInFile"));
+              return;
+            }
             new Notice(t("scrape.importedSites", { count }));
             this.update();
           })
-          .catch(() => new Notice(t("scrape.importFailed")));
-      });
-      input.click();
-    });
-    const testAll = footer.createEl("button", {
-      text: t("scrape.testEnabledSites"),
-      attr: { type: "button" }
-    });
-    testAll.addEventListener("click", () => {
-      testAll.disabled = true;
-      void Promise.all(
-        sites
-          .filter((site) => site.enabled !== false)
-          .map((site) => this.plugin.testScrapeSite(site))
-      ).then((results) => {
-        const ok = results.filter((result) => result.ok).length;
-        const failed = results.length - ok;
-        new Notice(
-          failed === 0
-            ? t("scrape.allSitesOk", { count: ok })
-            : t("scrape.allSitesPartial", { ok, failed })
-        );
-        testAll.disabled = false;
-      });
-    });
+          .catch((error) => {
+            console.error("video-library: failed to import scrape sites", error);
+            new Notice(t("scrape.importFailed"));
+          });
+      },
+      { once: true }
+    );
+    input.addEventListener("cancel", cleanup, { once: true });
+
+    try {
+      win?.focus();
+    } catch {
+      // Ignore focus failures; the picker below is what matters.
+    }
+    input.click();
+  }
+
+  private exportSites(sites: Marker[]): void {
+    if (sites.length === 0) {
+      new Notice(t("scrape.noSitesToExport"));
+      return;
+    }
+    const payload = {
+      version: 1,
+      type: "video-library-scrape-sites",
+      generatedAt: new Date().toISOString(),
+      sites: sites.map((site) => ({
+        ...site,
+        capabilities: (site.capabilities || []).filter((capability) => capability !== "欧美")
+      }))
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const doc = this.containerEl.ownerDocument;
+    const today = new Date();
+    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+      today.getDate()
+    ).padStart(2, "0")}`;
+    const link = doc.createElement("a");
+    link.href = url;
+    link.download = `video-library-scrape-sites-${date}.json`;
+    doc.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    new Notice(t("scrape.exportedSites"));
   }
 
   private renderSiteRow(parent: HTMLElement, site: Marker): void {
@@ -296,10 +420,14 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     });
 
     const actions = row.createDiv({ cls: "vl-settings-site-actions" });
-    this.siteAction(actions, "↑", t("scrape.moveUp"), () => this.moveSite(site, -1));
-    this.siteAction(actions, "↓", t("scrape.moveDown"), () => this.moveSite(site, 1));
+    this.siteAction(actions, "chevron-up", t("scrape.moveUp"), () => this.moveSite(site, -1));
+    this.siteAction(actions, "chevron-down", t("scrape.moveDown"), () => this.moveSite(site, 1));
     const status = actions.createSpan({ cls: "vl-settings-site-status" });
-    const test = actions.createEl("button", { text: t("scrape.test"), attr: { type: "button" } });
+    const test = actions.createEl("button", {
+      cls: "vl-settings-site-action",
+      attr: { type: "button", title: t("scrape.test"), "aria-label": t("scrape.test") }
+    });
+    setIcon(test, "flask-conical");
     test.addEventListener("click", () => {
       test.disabled = true;
       status.setText(t("scrape.testing"));
@@ -309,7 +437,7 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
         test.disabled = false;
       });
     });
-    this.siteAction(actions, "×", t("action.delete"), () => {
+    this.siteAction(actions, "x", t("action.delete"), () => {
       new ConfirmModal(this.app, {
         title: t("marker.deleteTitle"),
         description: t("marker.deleteDesc", {
@@ -328,16 +456,16 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
 
   private siteAction(
     parent: HTMLElement,
-    text: string,
+    icon: string,
     label: string,
     onClick: () => void,
     className = ""
   ): void {
     const button = parent.createEl("button", {
       cls: `vl-settings-site-action ${className}`.trim(),
-      text,
       attr: { type: "button", title: label, "aria-label": label }
     });
+    setIcon(button, icon);
     button.addEventListener("click", onClick);
   }
 

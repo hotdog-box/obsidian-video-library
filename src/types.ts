@@ -99,6 +99,9 @@ export interface VideoItem {
   videoId?: string;
   title: string;
   author?: string;
+  studio?: string;
+  series?: string;
+  performers?: string[];
   description?: string;
   categoryId: string;
   folderId?: string | null;

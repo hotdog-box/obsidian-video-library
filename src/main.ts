@@ -101,6 +101,9 @@ export type FolderMutationResult =
 export default class VideoLibraryPlugin extends Plugin {
   data: PluginData = createDefaultData();
   coverStore!: CoverStore;
+  private coverQueue: string[] = [];
+  private coverQueueSet = new Set<string>();
+  private coverQueueRunning = false;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -230,10 +233,22 @@ export default class VideoLibraryPlugin extends Plugin {
                 }
               }
             }
+            const rawPerformers = (video as { performers?: unknown }).performers;
+            const performers = (Array.isArray(rawPerformers)
+              ? rawPerformers
+              : typeof rawPerformers === "string"
+                ? rawPerformers.split(/[,，、/;；\n]+/)
+                : []
+            )
+              .map((name) => String(name).trim())
+              .filter((name, index, list) => Boolean(name) && list.indexOf(name) === index);
             return {
               ...video,
               id: video.id || uid("vid"),
               provider,
+              studio: video.studio ? String(video.studio).trim() || undefined : undefined,
+              series: video.series ? String(video.series).trim() || undefined : undefined,
+              performers,
               localExternal: Boolean(video.localExternal),
               title: video.title || (video.url ? fallbackTitleFromUrl(video.url) : t("form.untitled")),
               categoryId:
@@ -696,10 +711,11 @@ export default class VideoLibraryPlugin extends Plugin {
     paths: string[],
     folderId: string | null = null,
     categoryId = UNCATEGORIZED_ID
-  ): Promise<{ imported: number; skipped: number }> {
+  ): Promise<{ imported: number; skipped: number; ids: string[] }> {
     const nodePath = getNodePath();
     let imported = 0;
     let skipped = 0;
+    const ids: string[] = [];
     for (const filePath of paths) {
       if (!nodePath?.basename || this.findDuplicate("", filePath)) {
         skipped += 1;
@@ -723,23 +739,25 @@ export default class VideoLibraryPlugin extends Plugin {
       };
       await this.ensureExternalLink(video);
       this.data.videos.push(video);
+      ids.push(video.id);
       imported += 1;
     }
     if (imported > 0) {
       await this.persist();
       this.refreshViews();
+      this.queueCoverCaptures(ids);
     }
-    return { imported, skipped };
+    return { imported, skipped, ids };
   }
 
   async importExternalFolder(
     folderPath: string,
     parentFolderId: string | null = null
-  ): Promise<{ imported: number; skipped: number; folders: number; categories: number }> {
+  ): Promise<{ imported: number; skipped: number; folders: number; categories: number; ids: string[] }> {
     const fs = getNodeFs();
     const nodePath = getNodePath();
     if (!fs?.readdirSync || !nodePath?.basename) {
-      return { imported: 0, skipped: 0, folders: 0, categories: 0 };
+      return { imported: 0, skipped: 0, folders: 0, categories: 0, ids: [] };
     }
     const videoExtensions = new Set([
       "mp4", "mkv", "webm", "mov", "avi", "wmv", "flv", "m4v", "ts", "mpg", "mpeg", "rmvb", "3gp"
@@ -748,6 +766,7 @@ export default class VideoLibraryPlugin extends Plugin {
     let skipped = 0;
     let folders = 0;
     let categories = 0;
+    const ids: string[] = [];
 
     const ensureFolder = (parentId: string | null, name: string): string => {
       const existing = this.data.folders.find(
@@ -829,6 +848,7 @@ export default class VideoLibraryPlugin extends Plugin {
         };
         await this.ensureExternalLink(video);
         this.data.videos.push(video);
+        ids.push(video.id);
         imported += 1;
       }
     };
@@ -839,7 +859,8 @@ export default class VideoLibraryPlugin extends Plugin {
     await walk(folderPath, rootFolderId, rootCategoryId, 0);
     await this.persist();
     this.refreshViews();
-    return { imported, skipped, folders, categories };
+    this.queueCoverCaptures(ids);
+    return { imported, skipped, folders, categories, ids };
   }
 
   async updateVideo(video: VideoItem): Promise<void> {
@@ -1090,14 +1111,29 @@ export default class VideoLibraryPlugin extends Plugin {
     return video.url;
   }
 
-  async captureCoverFor(video: VideoItem, notify = true): Promise<boolean> {
+  getVideoFileSize(video: VideoItem): number | undefined {
+    if (!video.localPath) return undefined;
+    if (!video.localExternal) {
+      const file = this.getLocalFile(video.localPath);
+      return file?.stat.size;
+    }
+    const fs = getNodeFs();
+    if (!fs?.statSync) return undefined;
+    try {
+      return fs.statSync(video.localPath).size;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async captureCoverFor(video: VideoItem, notify = true, ratio = 0.12): Promise<boolean> {
     const source = this.getVideoSource(video);
     if (!source) {
       if (notify) new Notice(t("notice.captureFailed"));
       return false;
     }
     if (notify) new Notice(t("notice.captureStarted"));
-    const buffer = await this.coverStore.captureVideoFrame(source);
+    const buffer = await this.coverStore.captureVideoFrame(source, ratio);
     if (!buffer) {
       if (notify) new Notice(t("notice.captureFailed"));
       return false;
@@ -1110,5 +1146,62 @@ export default class VideoLibraryPlugin extends Plugin {
     this.refreshViews();
     if (notify) new Notice(t("notice.coverUpdated"));
     return true;
+  }
+
+  queueCoverCaptures(videoIds: string[], notify = true): void {
+    const added: string[] = [];
+    for (const id of videoIds) {
+      if (this.coverQueueSet.has(id)) continue;
+      const video = this.data.videos.find((candidate) => candidate.id === id);
+      if (!video || video.coverPath || !this.getVideoSource(video)) continue;
+      this.coverQueueSet.add(id);
+      this.coverQueue.push(id);
+      added.push(id);
+    }
+    if (added.length === 0) return;
+    if (notify) new Notice(t("notice.coverQueueStarted", { count: added.length }));
+    void this.processCoverQueue();
+  }
+
+  private async processCoverQueue(): Promise<void> {
+    if (this.coverQueueRunning) return;
+    this.coverQueueRunning = true;
+    let captured = 0;
+    let failed = 0;
+    try {
+      while (this.coverQueue.length > 0) {
+        const id = this.coverQueue.shift();
+        if (!id) continue;
+        this.coverQueueSet.delete(id);
+        const video = this.data.videos.find((candidate) => candidate.id === id);
+        if (!video || video.coverPath) continue;
+        const source = this.getVideoSource(video);
+        if (!source) {
+          failed += 1;
+          continue;
+        }
+        let buffer: ArrayBuffer | null = null;
+        for (let attempt = 0; attempt < 2 && !buffer; attempt += 1) {
+          const ratio = 0.1 + Math.random() * 0.8;
+          buffer = await this.coverStore.captureVideoFrame(source, ratio);
+        }
+        if (!buffer) {
+          failed += 1;
+          continue;
+        }
+        video.coverPath = await this.coverStore.saveBuffer(buffer, "jpg");
+        video.updatedAt = Date.now();
+        captured += 1;
+        await this.persist();
+        if (captured % 5 === 0) this.refreshViews();
+      }
+    } finally {
+      this.coverQueueRunning = false;
+      this.refreshViews();
+      if (captured > 0) {
+        new Notice(t("notice.coverQueueDone", { count: captured, failed }));
+      }
+      if (this.coverQueue.length > 0) void this.processCoverQueue();
+    }
   }
 }

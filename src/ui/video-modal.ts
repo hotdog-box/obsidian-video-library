@@ -42,6 +42,9 @@ export class VideoEditModal extends Modal {
   private localPath?: string;
   private localExternal = false;
   private titleInput!: HTMLInputElement;
+  private studioInput!: HTMLInputElement;
+  private seriesInput!: HTMLInputElement;
+  private performersInput!: HTMLInputElement;
   private categorySelect!: HTMLSelectElement;
   private tagChipsEl!: HTMLElement;
   private tagSelect!: HTMLSelectElement;
@@ -83,6 +86,7 @@ export class VideoEditModal extends Modal {
       ? {
           ...video,
           tags: [...video.tags],
+          performers: video.performers ? [...video.performers] : [],
           preview: clonePreviewConfig(video.preview)
         }
       : null;
@@ -350,6 +354,30 @@ export class VideoEditModal extends Modal {
       this.titleTouched = true;
     });
 
+    const creditsField = grid.createDiv({ cls: "vl-field vl-field-wide" });
+    const credits = creditsField.createDiv({ cls: "vl-credit-grid" });
+    const studioField = credits.createDiv({ cls: "vl-field" });
+    studioField.createEl("label", { text: t("form.studio"), cls: "vl-field-label" });
+    this.studioInput = studioField.createEl("input", {
+      type: "text",
+      cls: "vl-text-input",
+      attr: { placeholder: t("form.studioPlaceholder"), "data-vl-field": "studio" }
+    });
+    const seriesField = credits.createDiv({ cls: "vl-field" });
+    seriesField.createEl("label", { text: t("form.series"), cls: "vl-field-label" });
+    this.seriesInput = seriesField.createEl("input", {
+      type: "text",
+      cls: "vl-text-input",
+      attr: { placeholder: t("form.seriesPlaceholder"), "data-vl-field": "series" }
+    });
+    const performersField = credits.createDiv({ cls: "vl-field" });
+    performersField.createEl("label", { text: t("form.performers"), cls: "vl-field-label" });
+    this.performersInput = performersField.createEl("input", {
+      type: "text",
+      cls: "vl-text-input",
+      attr: { placeholder: t("form.performersPlaceholder"), "data-vl-field": "performers" }
+    });
+
     const categoryField = grid.createDiv({ cls: "vl-field" });
     categoryField.createEl("label", { text: t("form.category"), cls: "vl-field-label" });
     const categoryRow = categoryField.createDiv({ cls: "vl-input-row" });
@@ -589,6 +617,9 @@ export class VideoEditModal extends Modal {
   private populateFields(): void {
     this.urlInput.value = this.item?.url || "";
     this.titleInput.value = this.item?.title || "";
+    this.studioInput.value = this.item?.studio || "";
+    this.seriesInput.value = this.item?.series || "";
+    this.performersInput.value = (this.item?.performers || []).join("、");
     this.notesInput.value = this.item?.notes || "";
     this.fillCategories(this.item?.categoryId || UNCATEGORIZED_ID);
     this.renderTagChips();
@@ -1007,6 +1038,12 @@ export class VideoEditModal extends Modal {
         videoId: isLocal ? undefined : parsed?.videoId,
         title,
         author: this.author,
+        studio: this.studioInput.value.trim() || undefined,
+        series: this.seriesInput.value.trim() || undefined,
+        performers: this.performersInput.value
+          .split(/[,，、/;；\n]+/)
+          .map((name) => name.trim())
+          .filter((name, index, list) => Boolean(name) && list.indexOf(name) === index),
         description: this.item?.description,
         categoryId: this.categorySelect.value || UNCATEGORIZED_ID,
         folderId: this.item?.folderId || this.folderId,

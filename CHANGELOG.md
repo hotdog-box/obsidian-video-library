@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — 2026-11-01
+
+- Add Studio/label, Series and Performers fields to the add/edit dialog and persist them with each video.
+- Redesign the player details panel: duration, file size, category, studio, series, performers, author, added date, tags and notes are shown below the video.
+- Add an inline “Edit tags & notes” editor to the player, so tags and notes can be changed without leaving the playback view.
+- Batch and folder imports now generate a cover for every imported video by capturing a random frame in the background.
+- Show a live frame thumbnail and timestamp when hovering over the player timeline.
+- Add a Showcase selector to the Home hero with For you, Recently played, Recently added, Pinned, Favorites and Local videos modes.
+- Keep the external playback cache check so large libraries do not copy files again on every launch.
+
 ## 0.6.0 — 2026-11-01
 
 - Importing a whole folder now creates categories from the root folder and each top-level subfolder automatically.

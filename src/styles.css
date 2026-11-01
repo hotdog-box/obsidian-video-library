@@ -3887,3 +3887,268 @@ button.vl-frame-audio-button svg {
 .vl-list-row.is-marquee-hit {
   background: color-mix(in srgb, var(--interactive-accent) 12%, var(--background-primary));
 }
+
+/* ---------- Credit fields ---------- */
+
+.vl-credit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .vl-credit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Player details ---------- */
+
+.vl-player-details {
+  padding: 12px 14px;
+  margin-top: 12px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+}
+
+.vl-player-details-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.vl-player-details-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+}
+
+.vl-player-details-title h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.vl-player-folder-path {
+  overflow: hidden;
+  font-size: 9px;
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.vl-player-quick-edit {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  align-items: center;
+  height: 28px;
+  padding: 0 9px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+button.vl-player-quick-edit:hover {
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
+.vl-player-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 24px;
+}
+
+.vl-player-info-row {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.vl-player-info-wide {
+  margin-top: 5px;
+}
+
+.vl-player-info-label {
+  flex: 0 0 60px;
+  color: var(--text-faint);
+}
+
+.vl-player-info-value {
+  min-width: 0;
+  color: var(--text-normal);
+  overflow-wrap: anywhere;
+}
+
+.vl-player-info-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.vl-player-info-notes {
+  white-space: pre-wrap;
+}
+
+/* ---------- Player quick edit ---------- */
+
+.vl-player-inline-edit {
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px dashed var(--background-modifier-border);
+}
+
+.vl-player-inline-edit h5 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.vl-player-edit-field {
+  margin-bottom: 10px;
+}
+
+.vl-player-edit-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 5px 0;
+}
+
+.vl-player-tag-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.vl-player-tag-select {
+  max-width: 150px;
+  height: 30px;
+}
+
+.vl-player-tag-new {
+  flex: 1;
+  min-width: 120px;
+}
+
+.vl-player-notes-input {
+  width: 100%;
+  resize: vertical;
+}
+
+.vl-player-inline-actions {
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+/* ---------- Timeline hover frame ---------- */
+
+.vl-player-hover-preview {
+  position: absolute;
+  bottom: 52px;
+  z-index: 5;
+  width: 170px;
+  padding: 4px;
+  pointer-events: none;
+  background: #000;
+  border: 1px solid rgb(255 255 255 / 26%);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 55%);
+  transform: translateX(-50%);
+}
+
+.vl-player-hover-canvas {
+  display: block;
+  width: 160px;
+  height: 90px;
+  background: #111;
+  border-radius: 3px;
+}
+
+.vl-player-hover-canvas.is-hidden {
+  display: none;
+}
+
+.vl-player-hover-time {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-align: center;
+}
+
+.vl-player-scrub-source {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* ---------- Home showcase switch ---------- */
+
+.vl-home-hero-switch {
+  position: absolute;
+  top: 13px;
+  right: 15px;
+  z-index: 4;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 6px;
+  background: rgb(0 0 0 / 32%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 20px;
+  backdrop-filter: blur(8px);
+}
+
+.vl-home-hero-switch-label {
+  font-size: 9px;
+  color: rgb(255 255 255 / 68%);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.vl-home-hero-select {
+  height: 24px;
+  padding: 0 5px;
+  font-size: 10px;
+  color: #fff;
+  background: rgb(255 255 255 / 12%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 12px;
+}
+
+@media (max-width: 760px) {
+  .vl-player-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vl-player-hover-preview {
+    width: 140px;
+  }
+
+  .vl-player-hover-canvas {
+    width: 130px;
+    height: 73px;
+  }
+
+  .vl-home-hero-switch-label {
+    display: none;
+  }
+}

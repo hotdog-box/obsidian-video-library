@@ -3,7 +3,7 @@ import { formatDuration, providerName, t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import { buildEmbedUrl, parseVideoUrl } from "../providers";
 import type { PreviewClip, VideoItem } from "../types";
-import { ConfirmModal, openExternal } from "./common";
+import { ConfirmModal, formatDate, formatFileSize, openExternal } from "./common";
 import { VideoEditModal } from "./video-modal";
 
 function formatClock(seconds: number): string {
@@ -34,6 +34,22 @@ export class VideoPlayerModal extends Modal {
   private scrubbing = false;
   private triedDurationHack = false;
 
+  private detailsEl: HTMLElement | null = null;
+  private durationValueEl: HTMLElement | null = null;
+  private quickEditOpen = false;
+  private draftTags: string[] = [];
+  private draftTagsEl: HTMLElement | null = null;
+  private draftTagSelect: HTMLSelectElement | null = null;
+  private draftTagInput: HTMLInputElement | null = null;
+  private draftNotesInput: HTMLTextAreaElement | null = null;
+
+  private scrubVideo: HTMLVideoElement | null = null;
+  private scrubCanvas: HTMLCanvasElement | null = null;
+  private scrubBubble: HTMLElement | null = null;
+  private scrubTimeEl: HTMLElement | null = null;
+  private hoverTimer = 0;
+  private hoverSeq = 0;
+
   constructor(
     app: App,
     private plugin: VideoLibraryPlugin,
@@ -60,37 +76,8 @@ export class VideoPlayerModal extends Modal {
       contentEl.createEl("p", { text: t("player.bilibiliRestricted"), cls: "vl-player-notice" });
     }
 
-    const meta = contentEl.createDiv({ cls: "vl-player-meta" });
-    const badge = meta.createSpan({ text: providerName(this.item.provider), cls: "vl-provider-badge" });
-    badge.addClass(`is-${this.item.provider}`);
-    const category = this.plugin.getCategory(this.item.categoryId);
-    const categoryEl = meta.createSpan({ cls: "vl-player-category" });
-    const dot = categoryEl.createSpan({ cls: "vl-category-dot" });
-    dot.setCssStyles({ backgroundColor: category?.color || "var(--text-faint)" });
-    categoryEl.createSpan({ text: this.plugin.categoryName(this.item.categoryId) });
-    if (this.item.folderId) {
-      const folderPath = this.plugin.folderPath(this.item.folderId).map((folder) => folder.name);
-      if (folderPath.length > 0) meta.createSpan({ text: folderPath.join(" / ") });
-    }
-    if (this.item.author) {
-      meta.createSpan({ text: this.item.author, cls: "vl-player-author" });
-    }
-    if (this.item.duration) {
-      meta.createSpan({ text: formatDuration(this.item.duration), cls: "vl-player-duration" });
-    }
-
-    if (this.item.tags.length > 0) {
-      const tags = contentEl.createDiv({ cls: "vl-tag-list" });
-      for (const tag of this.item.tags) {
-        tags.createSpan({ text: `#${tag}`, cls: "vl-tag" });
-      }
-    }
-
-    if (this.item.notes) {
-      const notes = contentEl.createDiv({ cls: "vl-player-notes" });
-      notes.createEl("h4", { text: t("player.notes") });
-      notes.createEl("p", { text: this.item.notes });
-    }
+    this.detailsEl = contentEl.createDiv({ cls: "vl-player-details" });
+    this.renderDetails();
 
     const footer = contentEl.createDiv({ cls: "vl-modal-buttons vl-player-footer" });
     if (this.item.url) {
@@ -129,6 +116,226 @@ export class VideoPlayerModal extends Modal {
         }
       }).open();
     });
+  }
+
+  private infoRow(parent: HTMLElement, label: string, value: string): HTMLElement {
+    const row = parent.createDiv({ cls: "vl-player-info-row" });
+    row.createSpan({ cls: "vl-player-info-label", text: label });
+    return row.createSpan({ cls: "vl-player-info-value", text: value });
+  }
+
+  private renderDetails(): void {
+    const container = this.detailsEl;
+    if (!container) return;
+    container.empty();
+
+    const header = container.createDiv({ cls: "vl-player-details-head" });
+    const heading = header.createDiv({ cls: "vl-player-details-title" });
+    heading.createEl("h4", { text: t("player.info") });
+    const badge = heading.createSpan({ text: providerName(this.item.provider), cls: "vl-provider-badge" });
+    badge.addClass(`is-${this.item.provider}`);
+    if (this.item.folderId) {
+      const folderPath = this.plugin.folderPath(this.item.folderId).map((folder) => folder.name);
+      if (folderPath.length > 0) {
+        heading.createSpan({ text: folderPath.join(" / "), cls: "vl-player-folder-path" });
+      }
+    }
+
+    const quick = header.createEl("button", {
+      cls: "vl-player-quick-edit",
+      attr: { type: "button" }
+    });
+    setIcon(quick.createSpan({ cls: "vl-btn-icon" }), "square-pen");
+    quick.createSpan({ text: this.quickEditOpen ? t("action.cancel") : t("player.quickEdit") });
+    quick.addEventListener("click", () => {
+      if (this.quickEditOpen) {
+        this.quickEditOpen = false;
+        this.renderDetails();
+        return;
+      }
+      this.quickEditOpen = true;
+      this.draftTags = [...this.item.tags];
+      this.renderDetails();
+    });
+
+    const grid = container.createDiv({ cls: "vl-player-info-grid" });
+    this.durationValueEl = this.infoRow(
+      grid,
+      t("player.duration"),
+      formatDuration(this.item.duration || this.duration) || "—"
+    );
+    this.infoRow(grid, t("player.fileSize"), formatFileSize(this.plugin.getVideoFileSize(this.item)));
+    this.infoRow(grid, t("form.category"), this.plugin.categoryName(this.item.categoryId));
+    this.infoRow(grid, t("form.studio"), this.item.studio || "—");
+    this.infoRow(grid, t("form.series"), this.item.series || "—");
+    this.infoRow(
+      grid,
+      t("form.performers"),
+      this.item.performers && this.item.performers.length > 0 ? this.item.performers.join(" / ") : "—"
+    );
+    this.infoRow(grid, t("form.author"), this.item.author || "—");
+    this.infoRow(grid, t("player.added"), formatDate(this.item.createdAt));
+
+    const tagsRow = container.createDiv({ cls: "vl-player-info-row vl-player-info-wide" });
+    tagsRow.createSpan({ cls: "vl-player-info-label", text: t("form.tags") });
+    const tagsValue = tagsRow.createSpan({ cls: "vl-player-info-value vl-player-info-tags" });
+    if (this.item.tags.length === 0) {
+      tagsValue.setText("—");
+    } else {
+      for (const tag of this.item.tags) {
+        tagsValue.createSpan({ text: `#${tag}`, cls: "vl-tag" });
+      }
+    }
+
+    const notesRow = container.createDiv({ cls: "vl-player-info-row vl-player-info-wide" });
+    notesRow.createSpan({ cls: "vl-player-info-label", text: t("form.notes") });
+    const notesValue = notesRow.createSpan({ cls: "vl-player-info-value vl-player-info-notes" });
+    notesValue.setText(this.item.notes || "—");
+
+    if (this.quickEditOpen) this.renderQuickEdit(container);
+  }
+
+  private renderQuickEdit(parent: HTMLElement): void {
+    const editor = parent.createDiv({ cls: "vl-player-inline-edit" });
+    editor.createEl("h5", { text: t("player.quickEditTitle") });
+
+    const tagsField = editor.createDiv({ cls: "vl-player-edit-field" });
+    tagsField.createEl("label", { text: t("form.tags"), cls: "vl-field-label" });
+    this.draftTagsEl = tagsField.createDiv({ cls: "vl-player-edit-tags" });
+    this.renderDraftTags();
+
+    const controls = tagsField.createDiv({ cls: "vl-player-tag-controls" });
+    this.draftTagSelect = controls.createEl("select", {
+      cls: "dropdown vl-player-tag-select",
+      attr: { "aria-label": t("tag.selectedExisting") }
+    });
+    this.renderDraftTagSelect();
+    this.draftTagSelect.addEventListener("change", () => {
+      const value = this.draftTagSelect?.value || "";
+      if (this.draftTagSelect) this.draftTagSelect.value = "";
+      if (value) this.addDraftTag(value);
+    });
+
+    const newTag = controls.createEl("input", {
+      type: "text",
+      cls: "vl-text-input vl-player-tag-new",
+      attr: { placeholder: t("tag.newPlaceholder") }
+    });
+    this.draftTagInput = newTag;
+    const addTag = controls.createEl("button", {
+      cls: "vl-small-button",
+      attr: { type: "button" }
+    });
+    setIcon(addTag.createSpan(), "plus");
+    addTag.createSpan({ text: t("tag.add") });
+    addTag.addEventListener("click", () => {
+      this.addDraftTag(newTag.value);
+      newTag.value = "";
+    });
+    newTag.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      this.addDraftTag(newTag.value);
+      newTag.value = "";
+    });
+
+    const notesField = editor.createDiv({ cls: "vl-player-edit-field" });
+    notesField.createEl("label", { text: t("form.notes"), cls: "vl-field-label" });
+    this.draftNotesInput = notesField.createEl("textarea", {
+      cls: "vl-text-area vl-player-notes-input",
+      attr: { rows: "3", placeholder: t("form.notesPlaceholder") }
+    });
+    this.draftNotesInput.value = this.item.notes || "";
+
+    const actions = editor.createDiv({ cls: "vl-modal-buttons vl-player-inline-actions" });
+    const cancel = actions.createEl("button", { text: t("action.cancel"), attr: { type: "button" } });
+    cancel.addEventListener("click", () => {
+      this.quickEditOpen = false;
+      this.renderDetails();
+    });
+    const save = actions.createEl("button", {
+      text: t("action.save"),
+      cls: "mod-cta",
+      attr: { type: "button" }
+    });
+    save.addEventListener("click", () => void this.saveQuickEdit(save));
+  }
+
+  private renderDraftTags(): void {
+    if (!this.draftTagsEl) return;
+    this.draftTagsEl.empty();
+    if (this.draftTags.length === 0) {
+      this.draftTagsEl.createSpan({ text: t("tag.noTags"), cls: "vl-tag-picker-empty" });
+      return;
+    }
+    for (const name of this.draftTags) {
+      const tag = this.plugin.getTagByName(name);
+      const chip = this.draftTagsEl.createSpan({ cls: "vl-selected-tag" });
+      const dot = chip.createSpan({ cls: "vl-tag-dot" });
+      dot.setCssStyles({ backgroundColor: tag?.color || "var(--interactive-accent)" });
+      chip.createSpan({ text: name });
+      const remove = chip.createEl("button", {
+        cls: "vl-selected-tag-remove",
+        attr: { type: "button", title: t("tag.remove"), "aria-label": t("tag.remove") }
+      });
+      setIcon(remove, "x");
+      remove.addEventListener("click", () => this.removeDraftTag(name));
+    }
+  }
+
+  private renderDraftTagSelect(): void {
+    if (!this.draftTagSelect) return;
+    this.draftTagSelect.empty();
+    this.draftTagSelect.createEl("option", {
+      text: t("tag.selectedExisting"),
+      value: "",
+      attr: { selected: "true" }
+    });
+    for (const tag of this.plugin.data.tags) {
+      if (this.draftTags.some((name) => name.toLowerCase() === tag.name.toLowerCase())) continue;
+      this.draftTagSelect.createEl("option", { text: tag.name, value: tag.name });
+    }
+  }
+
+  private addDraftTag(raw: string): void {
+    const name = raw.trim();
+    if (!name) return;
+    const existing = this.plugin.getTagByName(name);
+    const canonical = existing?.name || name;
+    if (this.draftTags.some((tag) => tag.toLowerCase() === canonical.toLowerCase())) return;
+    this.draftTags.push(canonical);
+    this.renderDraftTags();
+    this.renderDraftTagSelect();
+  }
+
+  private removeDraftTag(name: string): void {
+    this.draftTags = this.draftTags.filter((tag) => tag !== name);
+    this.renderDraftTags();
+    this.renderDraftTagSelect();
+  }
+
+  private async saveQuickEdit(button: HTMLButtonElement): Promise<void> {
+    button.disabled = true;
+    try {
+      const pendingTag = this.draftTagInput?.value.trim();
+      if (pendingTag) this.addDraftTag(pendingTag);
+      const tags = await this.plugin.ensureTags(this.draftTags);
+      const notes = this.draftNotesInput?.value.trim() || undefined;
+      const updated: VideoItem = {
+        ...this.item,
+        tags,
+        notes,
+        updatedAt: Date.now()
+      };
+      await this.plugin.updateVideo(updated);
+      Object.assign(this.item, updated);
+      this.quickEditOpen = false;
+      this.renderDetails();
+      new Notice(t("notice.updated"));
+    } catch {
+      button.disabled = false;
+      new Notice(t("error.generic"));
+    }
   }
 
   private renderPlayer(container: HTMLElement): void {
@@ -216,6 +423,7 @@ export class VideoPlayerModal extends Modal {
     this.thumbEl = timeline.createDiv({ cls: "vl-player-thumb" });
     this.markersEl = timeline.createDiv({ cls: "vl-player-markers" });
     this.bindTimeline(timeline, video);
+    this.buildScrubPreview(container, video);
 
     this.totalLabel = bar.createSpan({ cls: "vl-player-time", text: "--:--" });
 
@@ -273,9 +481,11 @@ export class VideoPlayerModal extends Modal {
       event.preventDefault();
     });
     timeline.addEventListener("pointermove", (event) => {
+      this.onTimelineHover(event, timeline);
       if (!this.scrubbing) return;
       seekFromEvent(event);
     });
+    timeline.addEventListener("pointerleave", () => this.hideScrubPreview());
     const stop = (event: PointerEvent): void => {
       if (!this.scrubbing) return;
       this.scrubbing = false;
@@ -303,6 +513,113 @@ export class VideoPlayerModal extends Modal {
     });
   }
 
+  private buildScrubPreview(container: HTMLElement, video: HTMLVideoElement): void {
+    const bubble = container.createDiv({ cls: "vl-player-hover-preview is-hidden" });
+    this.scrubCanvas = bubble.createEl("canvas", {
+      cls: "vl-player-hover-canvas",
+      attr: { width: "160", height: "90" }
+    });
+    this.scrubTimeEl = bubble.createSpan({ cls: "vl-player-hover-time", text: "0:00" });
+    this.scrubBubble = bubble;
+
+    const scrub = container.createEl("video", {
+      cls: "vl-player-scrub-source",
+      attr: { preload: "metadata", playsinline: "true" }
+    });
+    scrub.muted = true;
+    scrub.src = video.currentSrc || video.src;
+    scrub.addEventListener("seeked", () => this.drawScrubFrame());
+    scrub.addEventListener("error", () => this.scrubCanvas?.addClass("is-hidden"));
+    this.scrubVideo = scrub;
+  }
+
+  private onTimelineHover(event: PointerEvent, timeline: HTMLElement): void {
+    if (!this.scrubBubble || !this.scrubTimeEl) return;
+    const video = this.videoEl;
+    if (!video) return;
+    const duration = this.effectiveDuration(video);
+    if (duration <= 0) {
+      this.hideScrubPreview();
+      return;
+    }
+    const rect = timeline.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    const time = ratio * duration;
+    this.scrubTimeEl.setText(formatClock(time));
+    this.scrubBubble.removeClass("is-hidden");
+
+    const stage = this.stageEl;
+    if (stage) {
+      const stageRect = stage.getBoundingClientRect();
+      const half = 86;
+      const left = Math.min(
+        Math.max(half, event.clientX - stageRect.left),
+        Math.max(half, stageRect.width - half)
+      );
+      this.scrubBubble.setCssStyles({ left: `${left}px` });
+    }
+
+    const sequence = ++this.hoverSeq;
+    window.clearTimeout(this.hoverTimer);
+    this.hoverTimer = window.setTimeout(() => {
+      if (sequence !== this.hoverSeq) return;
+      const scrub = this.scrubVideo;
+      if (!scrub) return;
+      try {
+        scrub.currentTime = Math.min(Math.max(0, duration - 0.05), Math.max(0, time));
+      } catch {
+        // Metadata may not be ready yet; the time label still updates.
+      }
+    }, 80);
+  }
+
+  private hideScrubPreview(): void {
+    this.hoverSeq += 1;
+    window.clearTimeout(this.hoverTimer);
+    this.hoverTimer = 0;
+    this.scrubBubble?.addClass("is-hidden");
+  }
+
+  private drawScrubFrame(): void {
+    const video = this.scrubVideo;
+    const canvas = this.scrubCanvas;
+    if (!video || !canvas || video.readyState < 2) return;
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const target = 16 / 9;
+    let sourceWidth = width;
+    let sourceHeight = height;
+    let sourceX = 0;
+    let sourceY = 0;
+    if (width / height > target) {
+      sourceWidth = height * target;
+      sourceX = (width - sourceWidth) / 2;
+    } else {
+      sourceHeight = width / target;
+      sourceY = (height - sourceHeight) / 2;
+    }
+    try {
+      context.drawImage(
+        video,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+      canvas.removeClass("is-hidden");
+    } catch {
+      canvas.addClass("is-hidden");
+    }
+  }
+
   private effectiveDuration(video: HTMLVideoElement): number {
     if (Number.isFinite(video.duration) && video.duration > 0) return video.duration;
     if (this.duration > 0) return this.duration;
@@ -316,6 +633,7 @@ export class VideoPlayerModal extends Modal {
     if (Number.isFinite(actual) && actual > 0) {
       this.duration = actual;
       this.totalLabel?.setText(formatClock(actual));
+      this.durationValueEl?.setText(formatDuration(actual) || "—");
       this.renderMarkers();
       this.updateProgress();
       return;
@@ -324,6 +642,7 @@ export class VideoPlayerModal extends Modal {
     if (this.item.duration && this.item.duration > 0) {
       this.duration = this.item.duration;
       this.totalLabel?.setText(formatClock(this.duration));
+      this.durationValueEl?.setText(formatDuration(this.duration) || "—");
       this.renderMarkers();
     }
 
@@ -340,6 +659,7 @@ export class VideoPlayerModal extends Modal {
       if (Number.isFinite(current.duration) && current.duration > 0) {
         this.duration = current.duration;
         this.totalLabel?.setText(formatClock(this.duration));
+        this.durationValueEl?.setText(formatDuration(this.duration) || "—");
         this.renderMarkers();
       }
       try {
@@ -504,6 +824,15 @@ export class VideoPlayerModal extends Modal {
   }
 
   onClose(): void {
+    window.clearTimeout(this.hoverTimer);
+    this.hoverTimer = 0;
+    if (this.scrubVideo) {
+      this.scrubVideo.pause();
+      this.scrubVideo.removeAttribute("src");
+      this.scrubVideo.load();
+      this.scrubVideo.remove();
+      this.scrubVideo = null;
+    }
     if (this.videoEl) {
       this.videoEl.pause();
       this.videoEl.removeAttribute("src");

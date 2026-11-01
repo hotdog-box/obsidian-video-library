@@ -10,7 +10,9 @@ Video Library is a desktop-only Obsidian plugin for collecting, organizing and w
 
 - Import Bilibili, YouTube, Vimeo, direct video URLs and generic web pages, with automatic title, author, duration and cover detection.
 - Add videos from inside the vault or from any folder on the computer; multi-file import and whole-folder import preserve subfolders, and folder import creates categories from the folder names.
-- The player has a custom timeline with hover-preview clip markers, so preview clips become one-click jump points.
+- The player has a custom timeline with hover frame thumbnails and hover-preview clip markers, so preview clips become one-click jump points.
+- Videos can store studio/label, series and performers. The player shows duration, file size, credits, tags and notes, with inline tag/notes editing.
+- Batch and folder imports capture a random frame for every imported video as its cover.
 - Organize with nested folders, a collapsible folder tree, breadcrumbs, tags with Any/All filtering, favorites, pinned videos, manual drag ordering and custom categories.
 - Switch between a cover grid and a compact list, set custom folder covers, and delete a folder together with its contents when you confirm it.
 - Windows Explorer-style selection: single-click selects, double-click opens, Ctrl/Cmd toggles, Shift extends, and dragging selected items moves them.
@@ -23,7 +25,7 @@ See the Chinese sections below for the complete feature list and usage notes.
 
 ---
 
-> 当前版本：`0.6.0`
+> 当前版本：`0.7.0`
 > 已在 Obsidian `1.14.5`（Windows 桌面版）实际测试通过。
 > 插件类型：仅桌面端。
 
@@ -62,7 +64,8 @@ See the Chinese sections below for the complete feature list and usage notes.
   - 标签管理：新建、重命名、删除标签，并查看每个标签的使用数量
   - 标签筛选：在当前分类和搜索范围内选择多个标签，可切换“任一标签”或“全部标签”匹配强度
   - 仿 B 站电影主页的“首页”：大图轮播推荐、置顶推荐、最近添加、收藏、本地视频和分类横向卡片
-  - 首页轮播优先展示最近播放的 6 个视频，自动轮换，可用圆点和左右箭头切换
+  - 首页轮播右上角可切换展示来源：推荐、最近播放、最近添加、置顶、收藏、本地视频
+  - 首页轮播优先展示最近播放的视频，自动轮换，可用圆点和左右箭头切换，每页最多 6 个
   - 本地视频支持仓库内文件和仓库外文件；仓库外文件直接引用绝对路径，不复制进仓库
   - 仓库外视频支持单文件选择、多选批量导入、整个文件夹导入；文件夹导入会保留子文件夹结构，并按根文件夹和每个一级子文件夹自动创建分类
   - 仓库外视频会在插件目录的 `external-links/` 建立硬链接供播放；跨盘无法硬链接时自动复制一份播放缓存
@@ -84,9 +87,14 @@ See the Chinese sections below for the complete feature list and usage notes.
   - 按添加时间、标题或手动顺序排序
   - 分类支持右键重命名/删除，侧边栏拖动可排序
   - 列表和首页空白处右键可直接添加视频；列表空白处还可新建文件夹
+  - 编辑视频时可填写厂商/片商、系列和演出人员，多个演出人员用逗号或“、”分隔
   - 内置播放器带完整进度条、缓冲进度、音量、全屏和播放/暂停控制；本地文件时长异常时进度条仍可拖动
+  - 播放页视频下方显示时长、视频大小、分类、厂商、系列、演出人员、作者、添加时间、标签和备注
+  - 播放页提供“修改标签和备注”按钮，可在不离开播放页的情况下直接编辑并同步
+  - 鼠标悬停在播放进度条上时，显示对应时间点的视频帧缩略图和时间标注
   - 设置了悬停预览的视频，会在播放进度条上显示可点击的菱形节点，点击直接跳到对应片段起点
   - 悬停预览设置里的播放按钮可听到声音，并提供音量滑块和静音按钮
+  - 批量导入和文件夹导入会为每个视频在后台随机截取一帧作为封面
   - 右键菜单：播放、编辑、置顶、打开原网页、复制链接、移动到文件夹、删除；文件夹可打开、改封面、重命名、移动、删除
   - 中英双语界面，可跟随 Obsidian 语言
 - **数据持久化**

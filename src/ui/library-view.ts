@@ -17,6 +17,7 @@ import { MoveToFolderModal } from "./move-modal";
 export const VIEW_TYPE = "video-library-view";
 
 type Filter = string;
+type HomeHeroMode = "forYou" | "played" | "recent" | "pinned" | "favorites" | "local";
 
 export class VideoLibraryView extends ItemView {
   private filter: Filter = "home";
@@ -55,6 +56,7 @@ export class VideoLibraryView extends ItemView {
   private homeCarouselSeq = 0;
   private homeCarouselIndex = 0;
   private homeCarouselItems: VideoItem[] = [];
+  private homeHeroMode: HomeHeroMode = "forYou";
   private marqueeEl: HTMLElement | null = null;
   private marqueeStart: { x: number; y: number; mode: "toggle" | "add" | "subtract" } | null = null;
   private marqueeMoved = false;
@@ -652,7 +654,19 @@ export class VideoLibraryView extends ItemView {
       seen.add(video.id);
       pool.push(video);
     }
-    this.homeCarouselItems = pool.slice(0, 6);
+    const localVideos = allVideos.filter((video) => video.provider === "local");
+    const pools: Record<HomeHeroMode, VideoItem[]> = {
+      forYou: pool.slice(0, 6),
+      played: played.slice(0, 6),
+      recent: recent.slice(0, 6),
+      pinned: pinned.slice(0, 6),
+      favorites: favorites.slice(0, 6),
+      local: localVideos.slice(0, 6)
+    };
+    if (!pools[this.homeHeroMode] || pools[this.homeHeroMode].length === 0) {
+      this.homeHeroMode = "forYou";
+    }
+    this.homeCarouselItems = pools[this.homeHeroMode].slice(0, 6);
     this.renderHeroCarousel(main);
 
     if (pinned.length > 0) this.renderHomeRow(main, t("home.pinned"), pinned, "pin", "all");
@@ -660,7 +674,6 @@ export class VideoLibraryView extends ItemView {
     if (favorites.length > 0) {
       this.renderHomeRow(main, t("home.favorites"), favorites, "star", "favorites");
     }
-    const localVideos = allVideos.filter((video) => video.provider === "local");
     if (localVideos.length > 0) this.renderHomeRow(main, t("home.local"), localVideos, "file-video", "all");
     for (const category of this.plugin.data.categories) {
       const items = recent.filter((video) => (video.categoryId || UNCATEGORIZED_ID) === category.id);
@@ -669,10 +682,43 @@ export class VideoLibraryView extends ItemView {
     this.updateNavActive();
   }
 
+  private homeHeroCount(mode: HomeHeroMode): number {
+    const videos = this.plugin.data.videos;
+    if (mode === "forYou") return videos.length;
+    if (mode === "played") return videos.filter((video) => video.lastPlayedAt).length;
+    if (mode === "pinned") return videos.filter((video) => video.pinned).length;
+    if (mode === "favorites") return videos.filter((video) => video.favorite).length;
+    if (mode === "local") return videos.filter((video) => video.provider === "local").length;
+    return videos.length;
+  }
+
   private renderHeroCarousel(parent: HTMLElement): void {
     const videos = this.homeCarouselItems;
     if (videos.length === 0) return;
     const hero = parent.createDiv({ cls: "vl-home-hero" });
+    const switchWrap = hero.createDiv({ cls: "vl-home-hero-switch" });
+    switchWrap.createSpan({ text: t("home.showcase"), cls: "vl-home-hero-switch-label" });
+    const switchSelect = switchWrap.createEl("select", {
+      cls: "dropdown vl-home-hero-select",
+      attr: { "aria-label": t("home.showcase") }
+    });
+    const modes: Array<{ value: HomeHeroMode; key: MessageKey }> = [
+      { value: "forYou", key: "home.showcaseForYou" },
+      { value: "played", key: "home.showcasePlayed" },
+      { value: "recent", key: "home.showcaseRecent" },
+      { value: "pinned", key: "home.showcasePinned" },
+      { value: "favorites", key: "home.showcaseFavorites" },
+      { value: "local", key: "home.showcaseLocal" }
+    ];
+    for (const mode of modes) {
+      const option = switchSelect.createEl("option", { text: t(mode.key), value: mode.value });
+      if (this.homeHeroCount(mode.value) === 0) option.disabled = true;
+    }
+    switchSelect.value = this.homeHeroMode;
+    switchSelect.addEventListener("change", () => {
+      this.homeHeroMode = switchSelect.value as HomeHeroMode;
+      this.render();
+    });
     const background = hero.createDiv({ cls: "vl-home-hero-bg" });
     const image = background.createEl("img", { attr: { alt: "" } });
     const content = hero.createDiv({ cls: "vl-home-hero-content" });

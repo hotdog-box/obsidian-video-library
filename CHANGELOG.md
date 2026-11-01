@@ -3,6 +3,8 @@
 ## 0.8.0 — 2026-11-01
 
 - Add a marker system for scraping: user-defined markers can bind videos to a MetaTube provider, and Bilibili/YouTube links receive automatic markers.
+- Add a scraping-site list in settings with per-site enable, capabilities, URL, test, up/down ordering, delete and custom add. Seed MetaTube, FC2, JavBus, JAV321, MGStage, HEYZO, JavDB and R18.dev entries.
+- Add MetaTube executable path plus start/stop service buttons in settings, and buttons to open the plugin data and covers folders.
 - Add optional MetaTube integration. Run MetaTube locally and set its URL (and optional token) in settings; the plugin calls its REST API and does not bundle MetaTube code.
 - Add a manual “Scrape metadata” flow in the player and video context menu: search, choose a candidate, review the field diff, and apply cover, author, studio, series, performers, tags, description, release date and duration.
 - Add marker management and four new editable fields: author, release date, description and markers. The video edit form also shows and manages markers.

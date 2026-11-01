@@ -121,25 +121,73 @@ http://127.0.0.1:8080
 
 如果服务开启了鉴权，准备好 Bearer Token。
 
+#### Windows 免 Docker 安装
+
+1. 安装 Go 1.25+，或使用免安装的 Go zip。
+2. 下载 MetaTube 源码并解压。
+3. 在源码目录执行：
+
+```powershell
+go build -o D:\MetaTube\metatube-server.exe ./cmd/server
+```
+
+4. 记下 `metatube-server.exe` 的完整路径，例如：
+
+```text
+D:\MetaTube\metatube-server.exe
+```
+
+5. 在插件设置中填写这个路径，然后点“启动 MetaTube 服务”。以后不需要再双击 bat。
+
+当前测试机已经安装在 `D:\MetaTube\metatube-server.exe`。
+
 ### 2. 在插件设置中连接
 
 打开“设置 → 视频库 → 信息刮削”：
 
-- 填写 `MetaTube 服务地址`
+- 填写 `MetaTube 服务地址`，例如 `http://127.0.0.1:8080`
 - 需要时填写 `MetaTube Token`
+- 填写 `MetaTube 程序路径`，用于启动/停止按钮
+- 点“启动 MetaTube 服务”
 - 点“测试 MetaTube 连接”，确认能读到来源数量
 
-### 3. 创建标记
+设置页同时提供“打开数据文件夹”和“打开封面文件夹”按钮，不需要自己去 `.obsidian/plugins/video-library` 里找。
+
+### 3. 刮削站点
+
+设置页的“刮削站点”会列出内置站点：
+
+- `metatube-server`
+- `FC2 官方`
+- `JavBus`
+- `JAV321`
+- `MGStage`
+- `HEYZO 官方`
+- `JavDB`（需独立适配，默认关闭）
+- `R18.dev`（需独立适配，默认关闭）
+
+每个站点可以：
+
+- 勾选启用/停用
+- 上移、下移调整尝试顺序
+- 编辑站点地址和 MetaTube 来源
+- 单独测试连接
+- 删除
+- 自定义添加
+
+前一个站点失败时才尝试下一个，全部失败才算失败。
+
+### 5. 创建标记
 
 标记（Marker）决定视频去哪个来源刮削：
 
 - “B站”“YouTube”是内置自动标记，添加对应链接时会自动打上。
-- 例如新建“JavBus”标记，把 `MetaTube 来源` 填成 `javbus`。
+- 站点列表里的 JavBus、JAV321、MGStage 等本身就是可选标记。
 - 在编辑视频时选择标记；也可以从“管理标记”里新建、改色、改来源或删除。
 
-MetaTube 的来源名称以服务实际返回为准。常见来源包括 `javbus`、`jav321`、`javfree`、`mgstage`、`sod`、`fanza`、`fc2` 等。**JavDB、MissAV 是否可用取决于你的 MetaTube 版本和来源插件**；当前 MetaTube 公共 provider 列表中没有这两个名字，需要单独适配或使用其他来源。
+MetaTube 的来源名称区分大小写，以服务 `/v1/providers` 实际返回为准。当前版本的常见名称包括 `JavBus`、`JAV321`、`JAVFREE`、`MGS`、`SOD`、`FANZA`、`FC2`、`HEYZO`。**JavDB、MissAV 是否可用取决于你的 MetaTube 版本和来源插件**；当前 MetaTube 公共 provider 列表中没有这两个名字，需要单独适配或使用其他来源。
 
-### 4. 手动刮削
+### 6. 手动刮削
 
 在播放页点“刮削信息”，或在视频上右键“刮削信息”：
 
@@ -150,7 +198,7 @@ MetaTube 的来源名称以服务实际返回为准。常见来源包括 `javbus
 
 可写入：封面、标题、作者、厂商/片商、系列、演出人员、标签、简介、上架时间、时长。标签采用合并方式，备注永远不会被覆盖。
 
-### 5. 自动刮削（默认关闭）
+### 7. 自动刮削（默认关闭）
 
 设置中打开“添加链接后自动刮削”后：
 

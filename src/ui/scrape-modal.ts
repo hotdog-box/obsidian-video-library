@@ -64,21 +64,15 @@ export class ScrapeModal extends Modal {
       attr: { "aria-label": t("scrape.provider") }
     });
     this.providerSelect.createEl("option", { text: t("scrape.allProviders"), value: "" });
-    const providers = new Set<string>();
-    for (const marker of this.plugin.markersForVideo(this.video)) {
-      if (marker.metatubeProvider) providers.add(marker.metatubeProvider);
-    }
-    if (providers.size === 0) {
-      for (const marker of this.plugin.data.markers) {
-        if (marker.metatubeProvider) providers.add(marker.metatubeProvider);
-      }
-    }
-    for (const provider of providers) {
-      this.providerSelect.createEl("option", { text: provider, value: provider });
-    }
-    const preferred = this.plugin
+    const sites = this.plugin.enabledScrapeSites();
+    const selectedSites = this.plugin
       .markersForVideo(this.video)
-      .find((marker) => marker.metatubeProvider)?.metatubeProvider;
+      .filter((marker) => marker.kind === "site" && marker.enabled !== false);
+    const visibleSites = selectedSites.length > 0 ? selectedSites : sites;
+    for (const site of visibleSites) {
+      this.providerSelect.createEl("option", { text: site.name, value: site.id });
+    }
+    const preferred = selectedSites[0]?.id;
     if (preferred) this.providerSelect.value = preferred;
 
     this.searchButton = searchRow.createEl("button", {
@@ -118,7 +112,8 @@ export class ScrapeModal extends Modal {
     this.statusEl.setText(t("scrape.searching"));
     try {
       const client = this.plugin.metaTubeClient();
-      this.results = await client.search(query, this.providerSelect.value || undefined);
+      const site = this.plugin.getMarker(this.providerSelect.value);
+      this.results = await client.search(query, site?.metatubeProvider);
       if (this.results.length === 0) {
         this.statusEl.setText(t("scrape.noResults"));
         return;

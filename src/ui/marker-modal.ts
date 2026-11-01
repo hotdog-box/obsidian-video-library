@@ -1,7 +1,7 @@
 import { App, Modal, Notice, setIcon } from "obsidian";
 import { t, type MessageKey } from "../i18n";
 import type VideoLibraryPlugin from "../main";
-import type { Marker, Provider } from "../types";
+import type { Marker, MarkerKind, Provider } from "../types";
 import { TAG_COLORS } from "../types";
 import { ConfirmModal, iconButton } from "./common";
 
@@ -102,16 +102,23 @@ export class MarkerEditModal extends Modal {
   private nameInput!: HTMLInputElement;
   private metatubeInput!: HTMLInputElement;
   private autoSelect!: HTMLSelectElement;
+  private urlInput!: HTMLInputElement;
+  private descriptionInput!: HTMLTextAreaElement;
+  private enabledInput!: HTMLInputElement;
+  private capabilityChecks: Array<{ name: string; input: HTMLInputElement }> = [];
   private color: string;
+  private kind: MarkerKind;
   private errorEl!: HTMLElement;
 
   constructor(
     app: App,
     private plugin: VideoLibraryPlugin,
     private marker: Marker | null,
-    private onSaved: (marker: Marker) => void
+    private onSaved: (marker: Marker) => void,
+    kind: MarkerKind = marker?.kind || "site"
   ) {
     super(app);
+    this.kind = kind;
     this.color = marker?.color || TAG_COLORS[plugin.data.markers.length % TAG_COLORS.length];
     this.modalEl.addClass("vl-marker-modal");
     this.modalEl.addClass("vl-marker-edit-modal");
@@ -148,25 +155,62 @@ export class MarkerEditModal extends Modal {
       });
     }
 
-    const autoField = this.contentEl.createDiv({ cls: "vl-field" });
-    autoField.createEl("label", { text: t("marker.autoProvider"), cls: "vl-field-label" });
-    this.autoSelect = autoField.createEl("select", { cls: "dropdown" });
-    for (const option of AUTO_PROVIDERS) {
-      this.autoSelect.createEl("option", { text: t(option.key as MessageKey), value: option.value });
-    }
-    this.autoSelect.value = this.marker?.autoProvider || "";
-
-    const metatubeField = this.contentEl.createDiv({ cls: "vl-field" });
-    metatubeField.createEl("label", { text: t("marker.metatubeProvider"), cls: "vl-field-label" });
-    this.metatubeInput = metatubeField.createEl("input", {
-      type: "text",
-      cls: "vl-text-input",
-      attr: {
-        value: this.marker?.metatubeProvider || "",
-        placeholder: t("marker.metatubePlaceholder")
+    if (this.kind === "link") {
+      const autoField = this.contentEl.createDiv({ cls: "vl-field" });
+      autoField.createEl("label", { text: t("marker.autoProvider"), cls: "vl-field-label" });
+      this.autoSelect = autoField.createEl("select", { cls: "dropdown" });
+      for (const option of AUTO_PROVIDERS) {
+        this.autoSelect.createEl("option", { text: t(option.key as MessageKey), value: option.value });
       }
-    });
-    metatubeField.createDiv({ text: t("marker.metatubeHint"), cls: "vl-field-hint" });
+      this.autoSelect.value = this.marker?.autoProvider || "";
+    } else {
+      const urlField = this.contentEl.createDiv({ cls: "vl-field" });
+      urlField.createEl("label", { text: t("marker.siteUrl"), cls: "vl-field-label" });
+      this.urlInput = urlField.createEl("input", {
+        type: "text",
+        cls: "vl-text-input",
+        attr: {
+          value: this.marker?.url || "",
+          placeholder: "https://www.javbus.com"
+        }
+      });
+
+      const metatubeField = this.contentEl.createDiv({ cls: "vl-field" });
+      metatubeField.createEl("label", { text: t("marker.metatubeProvider"), cls: "vl-field-label" });
+      this.metatubeInput = metatubeField.createEl("input", {
+        type: "text",
+        cls: "vl-text-input",
+        attr: {
+          value: this.marker?.metatubeProvider || "",
+          placeholder: t("marker.metatubePlaceholder")
+        }
+      });
+      metatubeField.createDiv({ text: t("marker.metatubeHint"), cls: "vl-field-hint" });
+
+      const capabilityField = this.contentEl.createDiv({ cls: "vl-field" });
+      capabilityField.createEl("label", { text: t("marker.capabilities"), cls: "vl-field-label" });
+      const capabilityRow = capabilityField.createDiv({ cls: "vl-marker-capabilities" });
+      this.capabilityChecks = ["有码", "无码", "欧美"].map((name) => {
+        const label = capabilityRow.createEl("label");
+        const input = label.createEl("input", { type: "checkbox" });
+        input.checked = Boolean(this.marker?.capabilities?.includes(name));
+        label.createSpan({ text: name });
+        return { name, input };
+      });
+
+      const descriptionField = this.contentEl.createDiv({ cls: "vl-field" });
+      descriptionField.createEl("label", { text: t("marker.siteDescription"), cls: "vl-field-label" });
+      this.descriptionInput = descriptionField.createEl("textarea", {
+        cls: "vl-text-area",
+        attr: { rows: "2", placeholder: t("marker.siteDescriptionPlaceholder") }
+      });
+      this.descriptionInput.value = this.marker?.description || "";
+
+      const enabledLabel = this.contentEl.createEl("label", { cls: "vl-marker-enabled" });
+      this.enabledInput = enabledLabel.createEl("input", { type: "checkbox" });
+      this.enabledInput.checked = this.marker?.enabled !== false;
+      enabledLabel.createSpan({ text: t("marker.enabled") });
+    }
 
     this.errorEl = this.contentEl.createDiv({ cls: "vl-form-error" });
     const buttons = this.contentEl.createDiv({ cls: "vl-modal-buttons" });
@@ -206,8 +250,19 @@ export class MarkerEditModal extends Modal {
       id: this.marker?.id || `marker_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
       name,
       color: this.color,
-      autoProvider: (this.autoSelect.value || undefined) as Provider | undefined,
-      metatubeProvider: this.metatubeInput.value.trim().toLowerCase() || undefined,
+      kind: this.kind,
+      enabled: this.kind === "site" ? this.enabledInput.checked : true,
+      autoProvider:
+        this.kind === "link" ? ((this.autoSelect.value || undefined) as Provider | undefined) : undefined,
+      metatubeProvider: this.kind === "site" ? this.metatubeInput.value.trim() || undefined : undefined,
+      capabilities:
+        this.kind === "site"
+          ? this.capabilityChecks.filter((item) => item.input.checked).map((item) => item.name)
+          : [],
+      url: this.kind === "site" ? this.urlInput.value.trim() || undefined : undefined,
+      description:
+        this.kind === "site" ? this.descriptionInput.value.trim() || undefined : undefined,
+      sortOrder: this.marker?.sortOrder,
       createdAt: this.marker?.createdAt || Date.now()
     };
     await this.plugin.saveMarker(marker);

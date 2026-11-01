@@ -8,9 +8,11 @@ import {
   createDefaultData,
   DATA_VERSION,
   DEFAULT_MARKERS,
+  DEFAULT_SCRAPE_SITES,
   Folder,
   LanguageSetting,
   Marker,
+  MarkerKind,
   PluginData,
   Provider,
   sanitizePreviewConfig,
@@ -60,13 +62,39 @@ interface FsLike {
 
 interface PathLike {
   basename: (path: string) => string;
+  dirname?: (path: string) => string;
   join: (...parts: string[]) => string;
 }
 
 interface ElectronLike {
   shell?: {
     trashItem?: (path: string) => Promise<void>;
+    openPath?: (path: string) => Promise<string>;
   };
+}
+
+interface ChildProcessLike {
+  pid?: number;
+  kill: () => boolean;
+  unref: () => void;
+}
+
+interface ChildProcessModuleLike {
+  spawn: (
+    command: string,
+    args: string[],
+    options: {
+      cwd?: string;
+      detached?: boolean;
+      stdio?: "ignore" | "inherit" | "pipe";
+      windowsHide?: boolean;
+    }
+  ) => ChildProcessLike;
+  execFile?: (
+    file: string,
+    args: string[],
+    callback?: (error: Error | null) => void
+  ) => unknown;
 }
 
 function nodeRequire<T>(id: string): T | null {
@@ -112,6 +140,7 @@ export type FolderMutationResult =
 export default class VideoLibraryPlugin extends Plugin {
   data: PluginData = createDefaultData();
   coverStore!: CoverStore;
+  private metaTubeProcess: ChildProcessLike | null = null;
   private coverQueue: string[] = [];
   private coverQueueSet = new Set<string>();
   private coverQueueRunning = false;
@@ -229,25 +258,60 @@ export default class VideoLibraryPlugin extends Plugin {
       return tag;
     };
 
-    let markersMigrated = !Array.isArray(loaded.markers);
-    const markers: Marker[] = markersMigrated
-      ? DEFAULT_MARKERS.map((marker) => ({ ...marker, createdAt: Date.now() }))
+    const needsSiteSeed = Number(loaded.version || 0) < 5;
+    let markersMigrated = !Array.isArray(loaded.markers) || needsSiteSeed;
+    const markers: Marker[] = !Array.isArray(loaded.markers)
+      ? [...DEFAULT_MARKERS, ...DEFAULT_SCRAPE_SITES].map((marker) => ({
+          ...marker,
+          createdAt: Date.now()
+        }))
       : (loaded.markers || [])
           .filter((marker): marker is Marker => Boolean(marker && marker.id && marker.name))
-          .map((marker) => ({
-            id: String(marker.id),
-            name: String(marker.name).trim(),
-            color: String(marker.color || TAG_COLORS[0]),
-            autoProvider: marker.autoProvider ? (String(marker.autoProvider) as Provider) : undefined,
-            metatubeProvider: marker.metatubeProvider
+          .map((marker, index) => {
+            const autoProvider = marker.autoProvider
+              ? (String(marker.autoProvider) as Provider)
+              : undefined;
+            const metatubeProvider = marker.metatubeProvider
               ? String(marker.metatubeProvider).trim() || undefined
-              : undefined,
-            createdAt: Number(marker.createdAt) || Date.now()
-          }))
+              : undefined;
+            const kind: MarkerKind =
+              marker.kind === "link" || (!metatubeProvider && autoProvider) ? "link" : "site";
+            return {
+              id: String(marker.id),
+              name: String(marker.name).trim(),
+              color: String(marker.color || TAG_COLORS[0]),
+              kind,
+              enabled: marker.enabled !== false,
+              autoProvider,
+              metatubeProvider,
+              capabilities: Array.isArray(marker.capabilities)
+                ? marker.capabilities.map((value) => String(value)).filter(Boolean)
+                : [],
+              url: marker.url ? String(marker.url).trim() || undefined : undefined,
+              description: marker.description
+                ? String(marker.description).trim() || undefined
+                : undefined,
+              sortOrder: Number.isFinite(Number(marker.sortOrder))
+                ? Number(marker.sortOrder)
+                : index,
+              createdAt: Number(marker.createdAt) || Date.now()
+            };
+          })
           .filter((marker) => Boolean(marker.name));
+
+    if (needsSiteSeed) {
+      for (const site of DEFAULT_SCRAPE_SITES) {
+        if (markers.some((marker) => marker.id === site.id)) continue;
+        markers.push({ ...site, createdAt: Date.now() });
+      }
+    }
+    markers.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    markers.forEach((marker, index) => {
+      marker.sortOrder = index;
+    });
     const markerIds = new Set(markers.map((marker) => marker.id));
     const autoMarkerFor = (provider: Provider): string | undefined =>
-      markers.find((marker) => marker.autoProvider === provider)?.id;
+      markers.find((marker) => marker.kind === "link" && marker.autoProvider === provider)?.id;
 
     const videos = Array.isArray(loaded.videos)
       ? loaded.videos
@@ -324,6 +388,8 @@ export default class VideoLibraryPlugin extends Plugin {
     if (typeof settings.pinnedCollapsed !== "boolean") settings.pinnedCollapsed = false;
     settings.metatubeUrl = typeof settings.metatubeUrl === "string" ? settings.metatubeUrl.trim() : "";
     settings.metatubeToken = typeof settings.metatubeToken === "string" ? settings.metatubeToken.trim() : "";
+    settings.metatubeServerPath =
+      typeof settings.metatubeServerPath === "string" ? settings.metatubeServerPath.trim() : "";
     settings.scrapeAuto = Boolean(settings.scrapeAuto);
     if (markersMigrated) tagsMigrated = true;
 
@@ -765,7 +831,17 @@ export default class VideoLibraryPlugin extends Plugin {
   }
 
   autoMarkerForProvider(provider: Provider): Marker | undefined {
-    return this.data.markers.find((marker) => marker.autoProvider === provider);
+    return this.data.markers.find(
+      (marker) => marker.kind === "link" && marker.autoProvider === provider
+    );
+  }
+
+  scrapeSites(): Marker[] {
+    return this.data.markers.filter((marker) => marker.kind === "site");
+  }
+
+  enabledScrapeSites(): Marker[] {
+    return this.scrapeSites().filter((marker) => marker.enabled !== false);
   }
 
   private ensureAutoMarker(video: VideoItem): void {
@@ -788,7 +864,13 @@ export default class VideoLibraryPlugin extends Plugin {
       ...marker,
       name: clean,
       color: marker.color || TAG_COLORS[0],
-      metatubeProvider: marker.metatubeProvider?.trim().toLowerCase() || undefined,
+      kind: marker.kind === "link" ? "link" : "site",
+      enabled: marker.enabled !== false,
+      metatubeProvider: marker.metatubeProvider?.trim() || undefined,
+      capabilities: marker.capabilities || [],
+      url: marker.url?.trim() || undefined,
+      description: marker.description?.trim() || undefined,
+      sortOrder: existing?.sortOrder ?? this.data.markers.length,
       createdAt: existing?.createdAt || marker.createdAt || Date.now()
     };
     if (existing) {
@@ -796,6 +878,26 @@ export default class VideoLibraryPlugin extends Plugin {
     } else {
       this.data.markers.push(next);
     }
+    await this.persist();
+    this.refreshViews();
+  }
+
+  async setMarkerEnabled(id: string, enabled: boolean): Promise<void> {
+    const marker = this.getMarker(id);
+    if (!marker) return;
+    marker.enabled = enabled;
+    await this.persist();
+    this.refreshViews();
+  }
+
+  async reorderMarkers(orderedIds: string[]): Promise<void> {
+    const positions = new Map(orderedIds.map((id, index) => [id, index]));
+    this.data.markers.sort(
+      (a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+    );
+    this.data.markers.forEach((marker, index) => {
+      marker.sortOrder = index;
+    });
     await this.persist();
     this.refreshViews();
   }
@@ -816,6 +918,108 @@ export default class VideoLibraryPlugin extends Plugin {
       url: this.data.settings.metatubeUrl,
       token: this.data.settings.metatubeToken
     });
+  }
+
+  private metaTubePort(): number {
+    try {
+      const parsed = new URL(this.data.settings.metatubeUrl || "http://127.0.0.1:8080");
+      return Number(parsed.port) || 8080;
+    } catch {
+      return 8080;
+    }
+  }
+
+  async testScrapeSite(marker: Marker): Promise<{ ok: boolean; error?: string }> {
+    if (marker.kind !== "site") return { ok: false, error: t("scrape.notASite") };
+    if (marker.enabled === false) return { ok: false, error: t("scrape.siteDisabled") };
+    const client = this.metaTubeClient();
+    if (!client.configured) return { ok: false, error: t("scrape.notConfigured") };
+    try {
+      const providers = await client.providers();
+      if (marker.metatubeProvider && !providers[marker.metatubeProvider]) {
+        return { ok: false, error: t("scrape.providerMissing", { provider: marker.metatubeProvider }) };
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  async metaTubeServiceStatus(): Promise<boolean> {
+    return (await this.testMetaTube()).ok;
+  }
+
+  async startMetaTubeServer(): Promise<{ ok: boolean; started?: boolean; error?: string }> {
+    if (await this.metaTubeServiceStatus()) return { ok: true, started: false };
+    const executable = this.data.settings.metatubeServerPath.trim();
+    if (!executable) return { ok: false, error: t("scrape.serverPathMissing") };
+    const fs = getNodeFs();
+    if (fs?.existsSync && !fs.existsSync(executable)) {
+      return { ok: false, error: t("scrape.serverFileMissing", { path: executable }) };
+    }
+    const childProcess = nodeRequire<ChildProcessModuleLike>("child_process");
+    if (!childProcess?.spawn) return { ok: false, error: t("scrape.serverProcessUnavailable") };
+    const nodePath = getNodePath();
+    const cwd = nodePath?.dirname ? nodePath.dirname(executable) : undefined;
+    const args = ["-port", String(this.metaTubePort())];
+    if (this.data.settings.metatubeToken.trim()) {
+      args.push("-token", this.data.settings.metatubeToken.trim());
+    }
+    try {
+      const child = childProcess.spawn(executable, args, {
+        cwd,
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true
+      });
+      child.unref();
+      this.metaTubeProcess = child;
+      await new Promise((resolve) => window.setTimeout(resolve, 1800));
+      const status = await this.testMetaTube();
+      if (!status.ok) return { ok: false, error: status.error || t("scrape.connectionFailed", { error: "" }) };
+      return { ok: true, started: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  async stopMetaTubeServer(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      this.metaTubeProcess?.kill();
+      this.metaTubeProcess = null;
+      const childProcess = nodeRequire<ChildProcessModuleLike>("child_process");
+      if (childProcess?.execFile) {
+        try {
+          childProcess.execFile("taskkill", ["/IM", "metatube-server.exe", "/F"], () => {
+            // Fire and forget; the process may already be gone.
+          });
+        } catch {
+          // Ignore a missing taskkill; the tracked child was stopped above.
+        }
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 700));
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  private pluginAbsolutePath(): string | null {
+    const base = (this.app.vault.adapter as unknown as { getBasePath?: () => string }).getBasePath?.();
+    if (!base || !this.manifest.dir) return null;
+    return `${base.replace(/[\\/]+$/, "")}/${this.manifest.dir}`;
+  }
+
+  async openPluginFolder(kind: "data" | "covers"): Promise<boolean> {
+    const base = this.pluginAbsolutePath();
+    if (!base) return false;
+    const target = kind === "covers" ? `${base}/covers` : base;
+    const electron = getElectron();
+    if (electron?.shell?.openPath) {
+      const result = await electron.shell.openPath(target);
+      return !result;
+    }
+    return false;
   }
 
   async testMetaTube(): Promise<{ ok: boolean; count?: number; error?: string }> {
@@ -887,20 +1091,25 @@ export default class VideoLibraryPlugin extends Plugin {
     if (!video) return;
     const client = this.metaTubeClient();
     if (!client.configured) return;
-    const marker = this.markersForVideo(video).find((candidate) => candidate.metatubeProvider);
-    if (!marker?.metatubeProvider) return;
+    const selectedSites = this.markersForVideo(video).filter(
+      (candidate) => candidate.kind === "site" && candidate.enabled !== false
+    );
+    const sites = selectedSites.length > 0 ? selectedSites : this.enabledScrapeSites();
+    if (sites.length === 0) return;
     try {
       for (const query of scrapeQueries(video)) {
-        const results = await client.search(query, marker.metatubeProvider);
-        if (results.length === 0) continue;
-        if (results.length > 1) {
-          new Notice(t("scrape.multipleCandidates", { count: results.length }));
+        for (const site of sites) {
+          const results = await client.search(query, site.metatubeProvider);
+          if (results.length === 0) continue;
+          if (results.length > 1) {
+            new Notice(t("scrape.multipleCandidates", { count: results.length }));
+            return;
+          }
+          const movie = await client.movie(results[0].provider, results[0].id);
+          await this.applyMetaTubeMovie(video, movie);
+          new Notice(t("scrape.autoApplied", { title: video.title }));
           return;
         }
-        const movie = await client.movie(results[0].provider, results[0].id);
-        await this.applyMetaTubeMovie(video, movie);
-        new Notice(t("scrape.autoApplied", { title: video.title }));
-        return;
       }
       new Notice(t("scrape.noResults"));
     } catch (error) {

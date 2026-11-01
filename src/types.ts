@@ -10,7 +10,7 @@ export type ViewMode = "grid" | "list";
 
 export type TagMatchMode = "any" | "all";
 
-export const DATA_VERSION = 4;
+export const DATA_VERSION = 5;
 
 export const UNCATEGORIZED_ID = "uncategorized";
 
@@ -37,12 +37,20 @@ export interface Tag {
   createdAt: number;
 }
 
+export type MarkerKind = "link" | "site";
+
 export interface Marker {
   id: string;
   name: string;
   color: string;
+  kind?: MarkerKind;
+  enabled?: boolean;
   autoProvider?: Provider;
   metatubeProvider?: string;
+  capabilities?: string[];
+  url?: string;
+  description?: string;
+  sortOrder?: number;
   createdAt: number;
 }
 
@@ -51,6 +59,8 @@ export const DEFAULT_MARKERS: Marker[] = [
     id: "marker_bilibili",
     name: "B站",
     color: "#fb7299",
+    kind: "link",
+    enabled: true,
     autoProvider: "bilibili",
     createdAt: 0
   },
@@ -58,7 +68,105 @@ export const DEFAULT_MARKERS: Marker[] = [
     id: "marker_youtube",
     name: "YouTube",
     color: "#ff5c5c",
+    kind: "link",
+    enabled: true,
     autoProvider: "youtube",
+    createdAt: 0
+  }
+];
+
+export const DEFAULT_SCRAPE_SITES: Marker[] = [
+  {
+    id: "site_metatube",
+    name: "metatube-server",
+    color: "#8b7fe8",
+    kind: "site",
+    enabled: true,
+    capabilities: ["有码", "无码", "欧美"],
+    url: "http://127.0.0.1:8080",
+    description: "自建 MetaTube 聚合服务，一次配置即可查询多个来源。",
+    createdAt: 0
+  },
+  {
+    id: "site_fc2",
+    name: "FC2 官方",
+    color: "#e8a33d",
+    kind: "site",
+    enabled: true,
+    metatubeProvider: "FC2",
+    capabilities: ["有码", "无码", "欧美"],
+    url: "https://adult.contents.fc2.com",
+    description: "FC2-PPV 一手来源，标题、发售日、标签和卖家信息都在这里。",
+    createdAt: 0
+  },
+  {
+    id: "site_javdb",
+    name: "JavDB",
+    color: "#4f9dd9",
+    kind: "site",
+    enabled: false,
+    capabilities: ["有码", "无码"],
+    url: "https://javdb.com",
+    description: "资料最全，但需要独立适配器；当前版本暂未启用。",
+    createdAt: 0
+  },
+  {
+    id: "site_javbus",
+    name: "JavBus",
+    color: "#5bb98c",
+    kind: "site",
+    enabled: true,
+    metatubeProvider: "JavBus",
+    capabilities: ["有码", "无码"],
+    url: "https://www.javbus.com",
+    description: "老牌聚合站，字段稳定，有码资料较全。",
+    createdAt: 0
+  },
+  {
+    id: "site_jav321",
+    name: "JAV321",
+    color: "#d6c04a",
+    kind: "site",
+    enabled: true,
+    metatubeProvider: "JAV321",
+    capabilities: ["有码"],
+    url: "https://www.jav321.com",
+    description: "不吃 Cloudflare，纯表单检索，适合作为补充来源。",
+    createdAt: 0
+  },
+  {
+    id: "site_mgs",
+    name: "MGStage",
+    color: "#d36bb3",
+    kind: "site",
+    enabled: true,
+    metatubeProvider: "MGS",
+    capabilities: ["有码"],
+    url: "https://www.mgstage.com",
+    description: "片商官方网站，片商资料准确。",
+    createdAt: 0
+  },
+  {
+    id: "site_heyzo",
+    name: "HEYZO 官方",
+    color: "#e46b6b",
+    kind: "site",
+    enabled: true,
+    metatubeProvider: "HEYZO",
+    capabilities: ["无码"],
+    url: "https://www.heyzo.com",
+    description: "片商官方网站，无码资料和番号匹配度高。",
+    createdAt: 0
+  },
+  {
+    id: "site_r18",
+    name: "R18.dev",
+    color: "#7a8a99",
+    kind: "site",
+    enabled: false,
+    capabilities: ["有码", "无码"],
+    url: "https://r18.dev",
+    description: "需要独立适配器；当前版本暂未启用。",
     createdAt: 0
   }
 ];
@@ -166,6 +274,7 @@ export interface PluginSettings {
   pinnedCollapsed: boolean;
   metatubeUrl: string;
   metatubeToken: string;
+  metatubeServerPath: string;
   scrapeAuto: boolean;
 }
 
@@ -213,6 +322,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   pinnedCollapsed: false,
   metatubeUrl: "",
   metatubeToken: "",
+  metatubeServerPath: "",
   scrapeAuto: false
 };
 
@@ -223,7 +333,10 @@ export function createDefaultData(): PluginData {
     categories: [],
     folders: [],
     tags: [],
-    markers: DEFAULT_MARKERS.map((marker) => ({ ...marker, createdAt: Date.now() })),
+    markers: [...DEFAULT_MARKERS, ...DEFAULT_SCRAPE_SITES].map((marker) => ({
+      ...marker,
+      createdAt: Date.now()
+    })),
     settings: { ...DEFAULT_SETTINGS }
   };
 }

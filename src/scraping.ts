@@ -91,7 +91,13 @@ export class MetaTubeClient {
 
   private async get<T>(path: string): Promise<T> {
     if (!this.configured) throw new Error("MetaTube URL is not configured");
-    const response = await requestUrl({ url: `${this.baseUrl()}${path}`, method: "GET", headers: this.headers() });
+    const timeout = new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error("MetaTube request timed out")), 8000);
+    });
+    const response = await Promise.race([
+      requestUrl({ url: `${this.baseUrl()}${path}`, method: "GET", headers: this.headers() }),
+      timeout
+    ]);
     if (response.status >= 400) {
       throw new Error(`MetaTube HTTP ${response.status}`);
     }

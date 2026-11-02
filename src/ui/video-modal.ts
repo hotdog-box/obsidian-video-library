@@ -3,7 +3,7 @@ import { providerName, t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import { fetchVideoMetadata } from "../metadata";
 import { fallbackTitleFromUrl, normalizeUrlInput, parseVideoUrl } from "../providers";
-import type { Marker, ParsedVideo, PreviewConfig, VideoItem, VideoMetadata } from "../types";
+import type { ParsedVideo, PreviewConfig, VideoItem, VideoMetadata } from "../types";
 import { clonePreviewConfig, uid, UNCATEGORIZED_ID } from "../types";
 import { CategoryEditModal } from "./category-modal";
 import { pickVaultFile, TextPromptModal } from "./common";

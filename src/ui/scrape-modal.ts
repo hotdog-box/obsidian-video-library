@@ -1,4 +1,4 @@
-import { App, Modal, Notice, setIcon } from "obsidian";
+import { App, Modal, Notice } from "obsidian";
 import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import {

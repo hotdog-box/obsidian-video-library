@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1 — 2026-11-02
+
+- Address Obsidian community review findings for 0.8.0.
+- Use the Obsidian `createEl` helper instead of `document.createElement` for the site-import file input and the site-export download link.
+- Replace direct `style` assignments on the hidden file input with `setCssStyles`.
+- Remove an unnecessary type assertion in `importScrapeSites()` and two unused imports.
+
 ## 0.8.0 — 2026-11-01
 
 - Add a marker system for scraping: user-defined markers can bind videos to a MetaTube provider, and Bilibili/YouTube links receive automatic markers.

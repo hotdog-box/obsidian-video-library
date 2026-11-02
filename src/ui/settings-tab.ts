@@ -302,15 +302,18 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
   private pickSiteFile(): void {
     const doc = this.containerEl.ownerDocument;
     const win = doc.defaultView;
-    const input = doc.createElement("input");
-    input.type = "file";
-    input.accept = ".json,application/json";
-    input.style.position = "fixed";
-    input.style.left = "-10000px";
-    input.style.top = "0";
-    input.style.width = "1px";
-    input.style.height = "1px";
-    input.style.opacity = "0";
+    const input = createEl("input", {
+      type: "file",
+      attr: { accept: ".json,application/json" }
+    });
+    input.setCssStyles({
+      position: "fixed",
+      left: "-10000px",
+      top: "0",
+      width: "1px",
+      height: "1px",
+      opacity: "0"
+    });
     doc.body.appendChild(input);
 
     let handled = false;
@@ -376,9 +379,12 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
       today.getDate()
     ).padStart(2, "0")}`;
-    const link = doc.createElement("a");
-    link.href = url;
-    link.download = `video-library-scrape-sites-${date}.json`;
+    const link = createEl("a", {
+      attr: {
+        href: url,
+        download: `video-library-scrape-sites-${date}.json`
+      }
+    });
     doc.body.appendChild(link);
     link.click();
     link.remove();

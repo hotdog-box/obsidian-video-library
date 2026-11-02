@@ -1,7 +1,7 @@
 {
   "id": "video-library",
   "name": "Video Library",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "minAppVersion": "1.13.0",
   "description": "Collect, organize and watch video links with automatic covers and custom categories.",
   "author": "hotdog-box",

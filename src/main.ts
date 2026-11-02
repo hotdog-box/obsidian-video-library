@@ -924,7 +924,7 @@ export default class VideoLibraryPlugin extends Plugin {
     const source = Array.isArray(payload)
       ? payload
       : payload && typeof payload === "object" && Array.isArray((payload as { sites?: unknown }).sites)
-        ? ((payload as { sites: unknown[] }).sites as unknown[])
+        ? (payload as { sites: unknown[] }).sites
         : [];
     let imported = 0;
     for (const raw of source.slice(0, 500)) {

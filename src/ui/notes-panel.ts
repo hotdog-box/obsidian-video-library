@@ -1,7 +1,8 @@
-import { App, Menu, Notice, setIcon, TFile } from "obsidian";
+import { App, MarkdownRenderer, Menu, Notice, setIcon, TFile } from "obsidian";
 import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
-import type { NoteNode, VideoItem } from "../types";
+import type { NoteNode, NoteSection, VideoItem } from "../types";
+import { NoteSectionsModal } from "./note-sections-modal";
 import { ConfirmModal } from "./common";
 
 export interface NotesPlayerHost {
@@ -36,6 +37,7 @@ export class NotesPanel {
   private treeEl: HTMLElement;
   private titleInput: HTMLInputElement;
   private nodes: NoteNode[] = [];
+  private sections: NoteSection[] = [];
   private editingId: string | null = null;
   private editorImages: string[] = [];
   private collapsed = new Set<string>();
@@ -75,6 +77,9 @@ export class NotesPanel {
     this.toolButton(toolbar, "file-text", t("notes.open"), () => void this.plugin.noteStore.openNote(this.video));
     this.toolButton(toolbar, "picture-in-picture-2", t("notes.float"), () => {
       void this.plugin.openNotesFloating(this.video);
+    });
+    this.toolButton(toolbar, "list-tree", t("notes.manageSections"), () => {
+      new NoteSectionsModal(this.app, this.plugin, this.video, () => void this.reload()).open();
     });
 
     this.panelEl.createDiv({
@@ -117,9 +122,11 @@ export class NotesPanel {
     const group = await this.plugin.noteStore.resolveGroup(this.video);
     this.titleInput.value = group.title || this.video.title || "";
     this.nodes = await this.plugin.noteStore.listNodes(this.video);
+    this.sections = await this.plugin.noteStore.listSections(this.video);
     for (const node of this.nodes) {
-      const images = this.imagesFor(node);
-      if (images.length > 1 && !this.manualCollapse.has(node.id)) this.collapsed.add(node.id);
+      if (this.hasSummaryImages(node.summary) && !this.manualCollapse.has(node.id)) {
+        this.collapsed.add(node.id);
+      }
     }
     this.host.refreshNoteMarkers(this.nodes);
     this.render();
@@ -135,14 +142,54 @@ export class NotesPanel {
       empty.createDiv({ cls: "vl-notes-empty-desc", text: t("notes.noNodesDesc") });
       return;
     }
+    const sectionIds = new Set(this.sections.map((section) => section.id));
     for (const node of this.nodes) {
-      this.renderNode(node);
+      if (!node.groupId || !sectionIds.has(node.groupId)) this.renderNode(node);
+    }
+    for (const section of this.sections) {
+      this.renderSection(section);
+      for (const node of this.nodes.filter((item) => item.groupId === section.id)) {
+        this.renderNode(node);
+      }
     }
   }
 
+  private renderSection(section: NoteSection): void {
+    const el = this.bodyEl.createDiv({ cls: "vl-note-section" });
+    el.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      el.addClass("is-drop-target");
+    });
+    el.addEventListener("dragleave", () => el.removeClass("is-drop-target"));
+    el.addEventListener("drop", (event) => {
+      event.preventDefault();
+      el.removeClass("is-drop-target");
+      const nodeId = event.dataTransfer?.getData("text/vl-note");
+      if (nodeId) {
+        void this.plugin.noteStore.assignGroup(this.video, nodeId, section.id).then(() => this.reload());
+      }
+    });
+    const head = el.createDiv({ cls: "vl-note-section-head" });
+    setIcon(head.createSpan({ cls: "vl-note-section-icon" }), "folder-tree");
+    head.createSpan({ cls: "vl-note-section-title", text: section.title });
+    const edit = head.createEl("button", {
+      cls: "vl-note-action",
+      attr: { type: "button", title: t("notes.editSection"), "aria-label": t("notes.editSection") }
+    });
+    setIcon(edit, "pencil");
+    edit.addEventListener("click", () => {
+      new NoteSectionsModal(this.app, this.plugin, this.video, () => void this.reload()).open();
+    });
+    if (section.summary) el.createDiv({ cls: "vl-note-section-summary", text: section.summary });
+  }
+
   private imagesFor(node: NoteNode): string[] {
-    if (node.images?.length) return [...node.images];
-    return node.imagePath ? [node.imagePath] : [];
+    const cover = node.coverImage || node.imagePath;
+    return cover ? [cover] : [];
+  }
+
+  private hasSummaryImages(summary: string): boolean {
+    return /!\[\[.*?\]\]|!\[.*?\]\(.*?\)/.test(summary);
   }
 
   private renderTree(): void {
@@ -189,28 +236,17 @@ export class NotesPanel {
     const menu = new Menu();
     menu.addItem((item) => {
       item.setTitle(t("notes.ungroup")).onClick(() => {
-        void this.plugin.noteStore.updateNode(this.video, { ...node, parentId: undefined }).then(() => this.reload());
+        void this.plugin.noteStore.assignGroup(this.video, node.id, undefined).then(() => this.reload());
       });
     });
-    for (const candidate of this.nodes) {
-      if (candidate.id === node.id) continue;
-      let cursor: NoteNode | undefined = candidate;
-      let cycle = false;
-      while (cursor?.parentId) {
-        if (cursor.parentId === node.id) {
-          cycle = true;
-          break;
-        }
-        cursor = this.nodes.find((item) => item.id === cursor?.parentId);
-      }
-      if (cycle) continue;
+    for (const section of this.sections) {
       menu.addItem((item) => {
         item
-          .setTitle(`${formatClock(candidate.time)} · ${candidate.comment || t("notes.untitledNode")}`)
-          .setIcon("corner-down-right")
+          .setTitle(section.title)
+          .setIcon("folder-tree")
           .onClick(() => {
             void this.plugin.noteStore
-              .updateNode(this.video, { ...node, parentId: candidate.id })
+              .assignGroup(this.video, node.id, section.id)
               .then(() => this.reload());
           });
       });
@@ -311,6 +347,19 @@ export class NotesPanel {
     }
 
     const editor = card.createDiv({ cls: "vl-note-editor" });
+    const cover = node.coverImage || node.imagePath;
+    if (cover) {
+      const coverWrap = editor.createDiv({ cls: "vl-note-image" });
+      const image = coverWrap.createEl("img", { attr: { alt: "", loading: "lazy" } });
+      const url = this.plugin.noteStore.displayPath(cover);
+      if (url) image.src = url;
+      const removeCover = coverWrap.createEl("button", {
+        cls: "vl-note-image-remove",
+        attr: { type: "button", title: t("notes.removeImage"), "aria-label": t("notes.removeImage") }
+      });
+      setIcon(removeCover, "x");
+      removeCover.addEventListener("click", () => void this.removeImage(node, cover));
+    }
     const comment = editor.createEl("input", {
       type: "text",
       cls: "vl-text-input",
@@ -328,55 +377,25 @@ export class NotesPanel {
       attr: { placeholder: t("notes.tagsPlaceholder") }
     });
     tags.value = node.tags.join(", ");
-    const imageStrip = editor.createDiv({ cls: "vl-note-editor-images" });
-    const renderStrip = (): void => {
-      imageStrip.empty();
-      for (let index = 0; index < this.editorImages.length; index += 1) {
-        const path = this.editorImages[index];
-        const item = imageStrip.createDiv({ cls: "vl-note-editor-image" });
-        const img = item.createEl("img", { attr: { alt: "", loading: "lazy" } });
-        const url = this.plugin.noteStore.displayPath(path);
-        if (url) img.src = url;
-        const controls = item.createDiv({ cls: "vl-note-image-controls" });
-        const up = controls.createEl("button", {
-          cls: "vl-note-action",
-          attr: { type: "button", title: t("notes.imageUp"), "aria-label": t("notes.imageUp") }
-        });
-        setIcon(up, "arrow-up");
-        up.disabled = index === 0;
-        up.addEventListener("click", () => {
-          [this.editorImages[index - 1], this.editorImages[index]] = [
-            this.editorImages[index],
-            this.editorImages[index - 1]
-          ];
-          renderStrip();
-        });
-        const down = controls.createEl("button", {
-          cls: "vl-note-action",
-          attr: { type: "button", title: t("notes.imageDown"), "aria-label": t("notes.imageDown") }
-        });
-        setIcon(down, "arrow-down");
-        down.disabled = index === this.editorImages.length - 1;
-        down.addEventListener("click", () => {
-          [this.editorImages[index + 1], this.editorImages[index]] = [
-            this.editorImages[index],
-            this.editorImages[index + 1]
-          ];
-          renderStrip();
-        });
-        const remove = controls.createEl("button", {
-          cls: "vl-note-action is-danger",
-          attr: { type: "button", title: t("notes.removeImage"), "aria-label": t("notes.removeImage") }
-        });
-        setIcon(remove, "trash-2");
-        remove.addEventListener("click", () => {
-          this.editorImages.splice(index, 1);
-          renderStrip();
-        });
-      }
+    const preview = editor.createDiv({
+      cls: "vl-note-summary-preview vl-note-summary-markdown"
+    });
+    let previewTimer = 0;
+    const renderPreview = (): void => {
+      window.clearTimeout(previewTimer);
+      previewTimer = window.setTimeout(() => {
+        preview.empty();
+        if (!summary.value.trim()) return;
+        void MarkdownRenderer.render(
+          this.app,
+          summary.value,
+          preview,
+          this.video.notePath || "",
+          this.plugin
+        );
+      }, 120);
     };
-    renderStrip();
-
+    summary.addEventListener("input", renderPreview);
     summary.addEventListener("paste", (event) => {
       const items = event.clipboardData?.items;
       if (!items) return;
@@ -390,11 +409,12 @@ export class NotesPanel {
         void file.arrayBuffer().then(async (buffer: ArrayBuffer) => {
           const extension = file.type.includes("png") ? "png" : "jpg";
           const path = await this.plugin.noteStore.saveImageBuffer(this.video, buffer, extension);
-          this.editorImages.push(path);
-          renderStrip();
+          insertAtCursor(summary, `\n![[${path}]]\n`);
+          renderPreview();
         });
       }
     });
+    renderPreview();
 
     const actions = editor.createDiv({ cls: "vl-actions-row" });
     const cancel = actions.createEl("button", { text: t("action.cancel"), attr: { type: "button" } });
@@ -428,8 +448,39 @@ export class NotesPanel {
       else this.collapsed.add(node.id);
       this.render();
     });
-    const content = wrap.createDiv({ cls: "vl-note-summary", text: node.summary });
-    if (collapsed) content.addClass("is-collapsed");
+    if (collapsed) {
+      const preview = node.summary.replace(/!\[\[.*?\]\]/g, "").replace(/!\[.*?\]\(.*?\)/g, "").trim();
+      wrap.createDiv({ cls: "vl-note-summary is-collapsed", text: preview || t("notes.summaryHasImages") });
+      return;
+    }
+    const content = wrap.createDiv({ cls: "vl-note-summary vl-note-summary-markdown" });
+    void MarkdownRenderer.render(this.app, node.summary, content, this.video.notePath || "", this.plugin).then(() => {
+      this.attachSummaryImageControls(content, node);
+    });
+  }
+
+  private attachSummaryImageControls(container: HTMLElement, node: NoteNode): void {
+    const paths = [...node.summary.matchAll(/!\[\[(.*?)\]\]/g)].map((match) => match[1]);
+    for (const image of Array.from(container.querySelectorAll("img"))) {
+      const path = paths.find((candidate) => {
+        const url = this.plugin.noteStore.displayPath(candidate);
+        return url ? image.src === url : false;
+      });
+      if (!path) continue;
+      const parent = image.parentElement;
+      if (!parent) continue;
+      parent.addClass("vl-note-inline-image-wrap");
+      const controls = parent.createDiv({ cls: "vl-note-inline-image-controls" });
+      const remove = controls.createEl("button", {
+        cls: "vl-note-action is-danger",
+        attr: { type: "button", title: t("notes.removeImage"), "aria-label": t("notes.removeImage") }
+      });
+      setIcon(remove, "trash-2");
+      remove.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void this.removeImage(node, path);
+      });
+    }
   }
 
   private async removeImage(node: NoteNode, path?: string): Promise<void> {
@@ -459,14 +510,12 @@ export class NotesPanel {
         .split(/[,，、\n]+/)
         .map((tag) => tag.trim().replace(/^#/, ""))
         .filter(Boolean),
-      images: [...this.editorImages],
-      imagePath: this.editorImages[0]
+      images: this.imagesFor(node),
+      coverImage: node.coverImage || node.imagePath,
+      imagePath: node.coverImage || node.imagePath
     };
-    const removed = this.imagesFor(node).filter((path) => !this.editorImages.includes(path));
     await this.plugin.noteStore.updateNode(this.video, updated);
-    for (const path of removed) await this.plugin.noteStore.trashImage(this.video, updated, path);
     this.editingId = null;
-    this.editorImages = [];
     await this.reload();
     new Notice(t("notes.saved"));
   }
@@ -492,11 +541,20 @@ export class NotesPanel {
     this.host.pauseForNote();
     let buffer: ArrayBuffer | null = null;
     if (video) {
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
       buffer = await this.plugin.coverStore.captureVideoElement(video, {
         maxWidth: this.plugin.data.settings.noteScreenshotWidth || 1920,
         type: "image/png",
         quality: 1
       });
+      if (!buffer) {
+        await new Promise((resolve) => window.setTimeout(resolve, 220));
+        buffer = await this.plugin.coverStore.captureVideoElement(video, {
+          maxWidth: this.plugin.data.settings.noteScreenshotWidth || 1920,
+          type: "image/png",
+          quality: 1
+        });
+      }
     }
     const node = await this.plugin.noteStore.addNode(this.video, time, {
       comment: "",

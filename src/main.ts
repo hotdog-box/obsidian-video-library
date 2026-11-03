@@ -24,6 +24,7 @@ import {
   Provider,
   sanitizePreviewConfig,
   SortMode,
+  TrashGroup,
   TrashImage,
   TrashNote,
   Tag,
@@ -174,6 +175,7 @@ export default class VideoLibraryPlugin extends Plugin {
     const pluginDir = this.manifest.dir || `${this.app.vault.configDir}/plugins/video-library`;
     this.coverStore = new CoverStore(this.app, pluginDir);
     this.noteStore = new NoteStore(this.app, this);
+    void this.noteStore.discoverGroups().then(() => this.syncAllNotePreviews());
     void this.streamServer.start().catch((error) => {
       console.warn("video-library: local stream server failed", error);
     });
@@ -504,6 +506,17 @@ export default class VideoLibraryPlugin extends Plugin {
               notePath: video.notePath ? String(video.notePath) : undefined,
               noteFolder: video.noteFolder ? String(video.noteFolder) : undefined,
               noteCoverPath: video.noteCoverPath ? String(video.noteCoverPath) : undefined,
+              previewFromNotes: Boolean(video.previewFromNotes),
+              noteSections: Array.isArray(video.noteSections)
+                ? video.noteSections
+                    .filter((section) => section && section.id && section.title)
+                    .map((section) => ({
+                      id: String(section.id),
+                      title: String(section.title),
+                      summary: String(section.summary || ""),
+                      createdAt: Number(section.createdAt) || Date.now()
+                    }))
+                : [],
               title: video.title || (video.url ? fallbackTitleFromUrl(video.url) : t("form.untitled")),
               categoryId:
                 video.categoryId && categoryIds.has(video.categoryId) ? video.categoryId : UNCATEGORIZED_ID,
@@ -569,6 +582,25 @@ export default class VideoLibraryPlugin extends Plugin {
           }))
       : [];
 
+    const trashGroups: TrashGroup[] = Array.isArray(loaded.trashGroups)
+      ? loaded.trashGroups
+          .filter((trash): trash is TrashGroup =>
+            Boolean(trash && trash.id && trash.videoId && trash.trashPath && trash.folderPath)
+          )
+          .map((trash) => ({
+            id: String(trash.id),
+            videoId: String(trash.videoId),
+            videoTitle: String(trash.videoTitle || ""),
+            groupId: String(trash.groupId || ""),
+            title: String(trash.title || ""),
+            notePath: String(trash.notePath || ""),
+            folderPath: String(trash.folderPath || ""),
+            trashPath: String(trash.trashPath),
+            coverPath: trash.coverPath ? String(trash.coverPath) : undefined,
+            deletedAt: Number(trash.deletedAt) || Date.now()
+          }))
+      : [];
+
     const settings = {
       ...base.settings,
       ...(loaded.settings || {})
@@ -597,6 +629,15 @@ export default class VideoLibraryPlugin extends Plugin {
     )
       ? Number(settings.noteScreenshotWidth)
       : 1920;
+    settings.notePreviewDuration = [1, 2, 3, 5, 10].includes(Number(settings.notePreviewDuration))
+      ? Number(settings.notePreviewDuration)
+      : 2;
+    settings.notePreviewTotal = [5, 10, 15, 20, 30].includes(Number(settings.notePreviewTotal))
+      ? Number(settings.notePreviewTotal)
+      : 10;
+    settings.notePreviewMax = [60, 120, 300, 600].includes(Number(settings.notePreviewMax))
+      ? Number(settings.notePreviewMax)
+      : 300;
     settings.noteAttachmentMode =
       settings.noteAttachmentMode === "same" || settings.noteAttachmentMode === "custom"
         ? settings.noteAttachmentMode
@@ -643,6 +684,7 @@ export default class VideoLibraryPlugin extends Plugin {
       noteGroups,
       trashNotes,
       trashImages,
+      trashGroups,
       settings
     };
 
@@ -701,6 +743,19 @@ export default class VideoLibraryPlugin extends Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType(NOTES_FLOAT_VIEW_TYPE)) {
       const view = leaf.view;
       if (view instanceof NotesFloatingView) view.refresh();
+    }
+  }
+
+  async refreshNotePreviews(): Promise<void> {
+    await this.syncAllNotePreviews();
+    this.refreshViews();
+  }
+
+  private async syncAllNotePreviews(): Promise<void> {
+    for (const group of [...this.data.noteGroups]) {
+      const video = this.data.videos.find((item) => item.id === group.videoId);
+      if (!video) continue;
+      await this.noteStore.syncPreview(video);
     }
   }
 

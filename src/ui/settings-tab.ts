@@ -196,6 +196,53 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
             }
           },
           {
+            name: t("settings.notePreviewDuration"),
+            desc: t("settings.notePreviewDurationDesc"),
+            control: {
+              type: "dropdown",
+              key: "notePreviewDuration",
+              defaultValue: "2",
+              options: {
+                "1": "1 秒",
+                "2": "2 秒",
+                "3": "3 秒",
+                "5": "5 秒",
+                "10": "10 秒"
+              }
+            }
+          },
+          {
+            name: t("settings.notePreviewTotal"),
+            desc: t("settings.notePreviewTotalDesc"),
+            control: {
+              type: "dropdown",
+              key: "notePreviewTotal",
+              defaultValue: "10",
+              options: {
+                "5": "5 秒",
+                "10": "10 秒",
+                "15": "15 秒",
+                "20": "20 秒",
+                "30": "30 秒"
+              }
+            }
+          },
+          {
+            name: t("settings.notePreviewMax"),
+            desc: t("settings.notePreviewMaxDesc"),
+            control: {
+              type: "dropdown",
+              key: "notePreviewMax",
+              defaultValue: "300",
+              options: {
+                "60": "60 秒",
+                "120": "120 秒",
+                "300": "300 秒",
+                "600": "600 秒"
+              }
+            }
+          },
+          {
             name: t("settings.noteAttachmentMode"),
             desc: t("settings.noteAttachmentModeDesc"),
             control: {
@@ -790,6 +837,9 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     if (key === "notesGrouping") return this.plugin.data.settings.notesGrouping;
     if (key === "notesViewMode") return this.plugin.data.settings.notesViewMode;
     if (key === "noteScreenshotWidth") return String(this.plugin.data.settings.noteScreenshotWidth);
+    if (key === "notePreviewDuration") return String(this.plugin.data.settings.notePreviewDuration);
+    if (key === "notePreviewTotal") return String(this.plugin.data.settings.notePreviewTotal);
+    if (key === "notePreviewMax") return String(this.plugin.data.settings.notePreviewMax);
     if (key === "noteAttachmentMode") return this.plugin.data.settings.noteAttachmentMode;
     if (key === "noteAttachmentFolder") return this.plugin.data.settings.noteAttachmentFolder;
     if (key === "noteMarkerShortcut") return this.plugin.data.settings.noteMarkerShortcut;
@@ -838,6 +888,27 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
       this.plugin.data.settings.noteScreenshotWidth =
         [1280, 1920, 2560, 3840, 0].includes(width) ? width : 1920;
       await this.plugin.persist();
+    } else if (key === "notePreviewDuration") {
+      const duration = Number(value);
+      this.plugin.data.settings.notePreviewDuration = [1, 2, 3, 5, 10].includes(duration)
+        ? duration
+        : 2;
+      await this.plugin.persist();
+      await this.plugin.refreshNotePreviews();
+    } else if (key === "notePreviewTotal") {
+      const duration = Number(value);
+      this.plugin.data.settings.notePreviewTotal = [5, 10, 15, 20, 30].includes(duration)
+        ? duration
+        : 10;
+      await this.plugin.persist();
+      await this.plugin.refreshNotePreviews();
+    } else if (key === "notePreviewMax") {
+      const duration = Number(value);
+      this.plugin.data.settings.notePreviewMax = [60, 120, 300, 600].includes(duration)
+        ? duration
+        : 300;
+      await this.plugin.persist();
+      await this.plugin.refreshNotePreviews();
     } else if (key === "noteAttachmentMode") {
       const mode = String(value || "subfolder") as NoteAttachmentMode;
       this.plugin.data.settings.noteAttachmentMode =

@@ -1209,6 +1209,10 @@ export class VideoEditModal extends Modal {
         duration: this.metadata?.duration || this.item?.duration,
         epId: this.metadata?.epId || parsed?.epId || this.item?.epId,
         preview: this.previewConfig,
+        previewFromNotes:
+          JSON.stringify(this.previewConfig || null) === JSON.stringify(this.item?.preview || null)
+            ? this.item?.previewFromNotes
+            : false,
         favorite: this.item?.favorite,
         createdAt: this.item?.createdAt || now,
         updatedAt: now

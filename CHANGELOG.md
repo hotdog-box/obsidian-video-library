@@ -8,6 +8,16 @@
 - Clicking a timestamp in a note or in the notes manager opens the video at that exact time.
 - Add a summary divider shortcut (default `Alt+G`) that inserts `---` and resumes playback.
 - Add node tags, inline note editing, paste-text/paste-image support, and manual screenshot removal.
+- Add player quality switching for Bilibili, playback speed 0.5×–2×, Space play/pause, arrow-key seeking and volume, draggable/maximizable modal, sticky footer and scrollable content.
+- Render note summaries as Markdown (headings, lists, inline images) with collapsible sections; pasted images stay inline instead of a separate strip.
+- Add multiple-image support, image ordering/removal to the recycle bin, and auto screenshot covers.
+- Add independent note groups with titles/summaries, drag cards into groups, and `##`/`###` Markdown structure; the left node tree stays in time order.
+- Add whole-note deletion to the recycle bin (folder, Markdown and attachments), with restore and permanent deletion.
+- Add recycle-bin search, group-by-video, multi-select permanent deletion, and timestamps on deleted screenshots.
+- Add note-derived hover previews (2-second clips, 10-second total by default) and settings for clip length, total duration and maximum duration.
+- Add a notes manager button under “Add video”, a note shortcut on video cards/list rows, and refresh the notes manager when notes close/change.
+- Fix Bilibili login by parsing Set-Cookie as well as the redirect URL; fix Baidu login validation via `xpan/nas?method=uinfo`.
+- Add Bilibili quality labels and a local stream proxy for Bilibili/cloud playback.
 - Add a notes manager view with one card per video folder, editable folder covers, per-timestamp cards, and a recycle bin with restore/permanent delete.
 - Add note settings for the notes root, screenshot location (same folder, subfolder, or a specified vault folder), and both shortcuts.
 - Add Bilibili QR-code login. The login cookie is stored only in the local plugin data, never uploaded by the plugin.

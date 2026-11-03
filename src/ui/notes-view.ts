@@ -65,7 +65,10 @@ export class NotesView extends ItemView {
     setIcon(trash.createSpan({ cls: "vl-btn-icon" }), "trash-2");
     trash.createSpan({
       text: t("notes.trash", {
-        count: this.plugin.data.trashNotes.length + this.plugin.data.trashImages.length
+        count:
+          this.plugin.data.trashNotes.length +
+          this.plugin.data.trashImages.length +
+          this.plugin.data.trashGroups.length
       })
     });
     trash.addEventListener("click", () => {
@@ -143,6 +146,29 @@ export class NotesView extends ItemView {
     });
     setIcon(playButton, "play");
     playButton.addEventListener("click", () => this.openVideo(video, 0));
+    const deleteNote = actions.createEl("button", {
+      cls: "vl-notes-manager-action is-small is-danger",
+      attr: { type: "button", title: t("notes.deleteWhole"), "aria-label": t("notes.deleteWhole") }
+    });
+    setIcon(deleteNote, "trash-2");
+    deleteNote.addEventListener("click", () => {
+      this.plugin.focusMainWindow();
+      new ConfirmModal(this.app, {
+        title: t("notes.deleteWholeTitle"),
+        description: t("notes.deleteWholeDesc", { title: group.title || video.title }),
+        confirmText: t("confirm.delete"),
+        danger: true,
+        onConfirm: async () => {
+          const ok = await this.plugin.noteStore.trashGroup(video);
+          if (!ok) {
+            new Notice(t("notes.deleteWholeFailed"));
+            return;
+          }
+          new Notice(t("notes.deleted"));
+          await this.render();
+        }
+      }).open();
+    });
 
     if (nodes.length === 0) {
       section.createDiv({ cls: "vl-notes-group-empty", text: t("notes.noNodes") });

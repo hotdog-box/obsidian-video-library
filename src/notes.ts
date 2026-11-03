@@ -1,10 +1,11 @@
 import { App, normalizePath, Notice, TFile } from "obsidian";
 import { t } from "./i18n";
 import type VideoLibraryPlugin from "./main";
-import type { NoteGroup, NoteNode, TrashImage, TrashNote, VideoItem } from "./types";
+import type { NoteGroup, NoteNode, NoteSection, TrashImage, TrashNote, VideoItem } from "./types";
 import { uid } from "./types";
 
 const NOTE_MARKER = /^<!--\s*vl-note:\s*(.*?)\s*-->\s*$/;
+const SECTION_MARKER = /^<!--\s*vl-section:\s*(.*?)\s*-->\s*$/;
 const NOTE_HEADER = /^#{2,3}\s+(\d{1,2}:\d{2}(?::\d{2})?)(?:\s*[·\-]\s*(.*))?$/;
 
 function formatClock(seconds: number): string {
@@ -67,31 +68,44 @@ function protocolLink(videoId: string, time: number): string {
 }
 
 function blockFor(video: VideoItem, node: NoteNode): string {
-  const images = node.images?.length ? node.images : node.imagePath ? [node.imagePath] : [];
+  const cover = node.coverImage || node.imagePath;
   const meta = JSON.stringify({
     id: node.id,
     time: node.time,
     tags: node.tags,
-    images,
-    image: images[0],
+    cover,
+    image: cover,
     parentId: node.parentId,
+    groupId: node.groupId,
     createdAt: node.createdAt
   });
-  const heading = `${node.parentId ? "###" : "##"} ${formatClock(node.time)}${node.comment ? ` · ${node.comment}` : ""}`;
+  const heading = `${node.groupId || node.parentId ? "###" : "##"} ${formatClock(node.time)}${node.comment ? ` · ${node.comment}` : ""}`;
   const parts = [
     heading,
     `<!-- vl-note: ${meta} -->`,
     "",
     protocolLink(video.id, node.time),
     "",
-    ...images.map((path) => `![[${path}]]`),
-    ...(images.length ? [""] : []),
+    cover ? `![[${cover}]]` : "",
+    ...(cover ? [""] : []),
     node.summary,
     "",
     "---",
     ""
   ];
   return parts.join("\n");
+}
+
+function removeImageFromSummary(summary: string, path: string): string {
+  return summary
+    .split(/\r?\n/)
+    .filter(
+      (line) =>
+        !line.includes(`![[${path}]]`) &&
+        !line.includes(`](${path})`)
+    )
+    .join("\n")
+    .trim();
 }
 
 function paragraphs(text: string): string[] {
@@ -307,7 +321,9 @@ export class NoteStore {
         tags?: string[];
         image?: string;
         images?: string[];
+        cover?: string;
         parentId?: string;
+        groupId?: string;
         createdAt?: number;
       };
       try {
@@ -331,38 +347,224 @@ export class NoteStore {
       }
       const bodyLines = lines.slice(index + 1, end);
       const body: string[] = [];
-      const images: string[] = Array.isArray(data.images)
-        ? data.images.map((path) => String(path)).filter(Boolean)
-        : data.image
-          ? [String(data.image)]
-          : [];
+      const imagePaths: string[] = [];
+      let cover = data.cover ? String(data.cover) : data.image ? String(data.image) : "";
+      let coverConsumed = false;
       for (const line of bodyLines) {
         const imageMatch = line.trim().match(/^!\[\[(.*?)\]\]$/);
-        if (imageMatch) {
-          if (!images.includes(imageMatch[1])) images.push(imageMatch[1]);
-          continue;
-        }
         const markdownImage = line.trim().match(/^!\[.*\]\((.*?)\)$/);
-        if (markdownImage) {
-          if (!images.includes(markdownImage[1])) images.push(markdownImage[1]);
+        const path = imageMatch?.[1] || markdownImage?.[1];
+        if (path) {
+          imagePaths.push(path);
+          if (!cover) {
+            cover = path;
+            coverConsumed = true;
+            continue;
+          }
+          if (path === cover && !coverConsumed) {
+            coverConsumed = true;
+            continue;
+          }
+          // Pasted images stay in the summary so Markdown rendering keeps their position.
+          body.push(line);
           continue;
         }
         if (!isSystemLine(line)) body.push(line);
       }
-      const summary = paragraphs(body.join("\n")).join("\n\n");
+      const summary = body.join("\n").trim();
       nodes.push({
         id: String(data.id || uid("note")),
         time,
         comment,
         summary,
         tags: Array.isArray(data.tags) ? data.tags.map((tag) => String(tag)).filter(Boolean) : [],
-        images,
-        imagePath: images[0],
+        images: imagePaths,
+        coverImage: cover || undefined,
+        imagePath: cover || undefined,
         parentId: data.parentId ? String(data.parentId) : undefined,
+        groupId: data.groupId ? String(data.groupId) : undefined,
         createdAt: Number(data.createdAt) || Date.now()
       });
     }
     return nodes.sort((a, b) => a.time - b.time);
+  }
+
+  async discoverGroups(): Promise<void> {
+    let changed = false;
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      if (frontmatter?.["video-library-note"] !== true) continue;
+      const videoId = String(frontmatter?.["video-id"] || "");
+      if (!videoId || this.groupFor(videoId)) continue;
+      const video = this.plugin.data.videos.find((item) => item.id === videoId);
+      if (!video) continue;
+      this.plugin.data.noteGroups.push({
+        id: uid("notegroup"),
+        videoId,
+        folderPath: file.parent?.path || this.root,
+        notePath: file.path,
+        title: file.basename,
+        createdAt: file.stat.ctime,
+        updatedAt: file.stat.mtime
+      });
+      video.notePath = file.path;
+      video.noteFolder = file.parent?.path;
+      changed = true;
+    }
+    if (changed) {
+      await this.plugin.persist();
+      this.plugin.refreshViews();
+    }
+  }
+
+  async syncPreview(video: VideoItem): Promise<void> {
+    const group = this.groupFor(video.id);
+    if (!group) return;
+    const nodes = await this.listNodes(video);
+    const settings = this.plugin.data.settings;
+    if (nodes.length > 0) {
+      const clipDuration = Math.max(1, Math.min(settings.notePreviewMax, settings.notePreviewDuration));
+      video.preview = {
+        duration: Math.min(settings.notePreviewMax, Math.max(1, settings.notePreviewTotal)),
+        clips: nodes.map((node) => ({
+          start: node.time,
+          end: node.time + clipDuration
+        }))
+      };
+      video.previewFromNotes = true;
+    } else if (video.previewFromNotes) {
+      video.preview = undefined;
+      video.previewFromNotes = false;
+    }
+    await this.plugin.persist();
+  }
+
+  parseSections(text: string): NoteSection[] {
+    const lines = text.split(/\r?\n/);
+    const sections: NoteSection[] = [];
+    for (let index = 0; index < lines.length; index += 1) {
+      const marker = lines[index].match(SECTION_MARKER);
+      if (!marker) continue;
+      let data: { id?: string; title?: string; summary?: string; createdAt?: number };
+      try {
+        data = JSON.parse(marker[1]) as typeof data;
+      } catch {
+        continue;
+      }
+      let headingIndex = index - 1;
+      while (headingIndex >= 0 && lines[headingIndex].trim() === "") headingIndex -= 1;
+      const heading = headingIndex >= 0 ? lines[headingIndex].match(/^##\s+(.*)$/) : null;
+      let end = lines.length;
+      for (let next = index + 1; next < lines.length; next += 1) {
+        if (
+          lines[next].match(SECTION_MARKER) ||
+          lines[next].match(NOTE_MARKER) ||
+          /^##\s+/.test(lines[next])
+        ) {
+          end = next;
+          break;
+        }
+      }
+      const body = lines
+        .slice(index + 1, end)
+        .filter((line) => line.trim() && line.trim() !== "---")
+        .join("\n")
+        .trim();
+      sections.push({
+        id: String(data.id || uid("notegroup")),
+        title: String(data.title || heading?.[1] || "分组"),
+        summary: data.summary ? String(data.summary) : body,
+        createdAt: Number(data.createdAt) || Date.now()
+      });
+    }
+    return sections;
+  }
+
+  async listSections(video: VideoItem): Promise<NoteSection[]> {
+    const group = this.groupFor(video.id);
+    if (!group) return [];
+    const text = await this.readText(group);
+    const sections = this.parseSections(text);
+    video.noteSections = sections;
+    return sections;
+  }
+
+  async addSection(video: VideoItem, title: string, summary = ""): Promise<NoteSection> {
+    const sections = await this.listSections(video);
+    const section: NoteSection = {
+      id: uid("section"),
+      title: title.trim() || "分组",
+      summary: summary.trim(),
+      createdAt: Date.now()
+    };
+    video.noteSections = [...sections, section];
+    await this.rebuildNote(video);
+    return section;
+  }
+
+  async updateSection(
+    video: VideoItem,
+    sectionId: string,
+    title: string,
+    summary: string
+  ): Promise<void> {
+    const sections = await this.listSections(video);
+    const section = sections.find((item) => item.id === sectionId);
+    if (!section) return;
+    section.title = title.trim() || section.title;
+    section.summary = summary.trim();
+    video.noteSections = sections;
+    await this.rebuildNote(video);
+  }
+
+  async deleteSection(video: VideoItem, sectionId: string): Promise<void> {
+    const sections = await this.listSections(video);
+    video.noteSections = sections.filter((item) => item.id !== sectionId);
+    const nodes = await this.listNodes(video);
+    for (const node of nodes) {
+      if (node.groupId === sectionId) {
+        await this.updateNode(video, { ...node, groupId: undefined, parentId: undefined });
+      }
+    }
+    await this.rebuildNote(video);
+  }
+
+  async assignGroup(video: VideoItem, nodeId: string, sectionId: string | undefined): Promise<void> {
+    const nodes = await this.listNodes(video);
+    const node = nodes.find((item) => item.id === nodeId);
+    if (!node) return;
+    await this.updateNode(video, { ...node, groupId: sectionId, parentId: undefined });
+    await this.rebuildNote(video);
+  }
+
+  async rebuildNote(video: VideoItem): Promise<void> {
+    const group = await this.resolveGroup(video);
+    const text = await this.readText(group);
+    const nodes = await this.listNodes(video);
+    const sections = video.noteSections || (await this.listSections(video));
+    const lines = text.split(/\r?\n/);
+    let firstHeading = lines.findIndex((line) => /^##\s+/.test(line));
+    if (firstHeading < 0) firstHeading = lines.length;
+    const header = lines.slice(0, firstHeading).join("\n").trimEnd();
+    const sectionIds = new Set(sections.map((section) => section.id));
+    const ungrouped = nodes.filter((node) => !node.groupId || !sectionIds.has(node.groupId));
+    const parts: string[] = [];
+    for (const node of ungrouped) parts.push(blockFor(video, { ...node, groupId: undefined }));
+    for (const section of sections) {
+      const meta = JSON.stringify({
+        id: section.id,
+        title: section.title,
+        summary: section.summary,
+        createdAt: section.createdAt
+      });
+      parts.push(`## ${section.title}\n<!-- vl-section: ${meta} -->\n\n${section.summary}\n\n---`);
+      for (const node of nodes.filter((item) => item.groupId === section.id)) {
+        parts.push(blockFor(video, node));
+      }
+    }
+    await this.writeGroup(group, `${header}\n\n${parts.join("\n\n")}\n`);
+    await this.plugin.persist();
+    await this.syncPreview(video);
   }
 
   async reload(video: VideoItem): Promise<NoteNode[]> {
@@ -397,6 +599,7 @@ export class NoteStore {
       summary: options.summary?.trim() || "",
       tags: options.tags?.map((tag) => tag.trim()).filter(Boolean) || [],
       images: imagePath ? [imagePath] : [],
+      coverImage: imagePath,
       imagePath,
       createdAt: Date.now()
     };
@@ -404,6 +607,7 @@ export class NoteStore {
     const next = `${text.trimEnd()}\n\n${blockFor(video, node)}`;
     await this.writeGroup(group, next);
     await this.plugin.persist();
+    await this.syncPreview(video);
     return node;
   }
 
@@ -436,6 +640,7 @@ export class NoteStore {
     const next = `${before}\n\n${blockFor(video, node)}${after ? `\n${after}` : ""}`;
     await this.writeGroup(group, next);
     await this.plugin.persist();
+    await this.syncPreview(video);
   }
 
   async deleteNode(video: VideoItem, nodeId: string): Promise<boolean> {
@@ -488,6 +693,7 @@ export class NoteStore {
       .trimStart()}`.trimEnd();
     await this.writeGroup(group, next);
     await this.plugin.persist();
+    await this.syncPreview(video);
     return true;
   }
 
@@ -501,6 +707,7 @@ export class NoteStore {
     await this.writeGroup(group, `${text.trimEnd()}\n\n${trash.block}\n`);
     this.plugin.data.trashNotes = this.plugin.data.trashNotes.filter((item) => item.id !== trashId);
     await this.plugin.persist();
+    await this.syncPreview(video);
     return true;
   }
 
@@ -544,8 +751,95 @@ export class NoteStore {
     return normalizePath(`${this.plugin.manifest.dir || ".obsidian/plugins/video-library"}/notes-trash/images`);
   }
 
+  private get trashGroupDir(): string {
+    return normalizePath(`${this.plugin.manifest.dir || ".obsidian/plugins/video-library"}/notes-trash/groups`);
+  }
+
+  async trashGroup(video: VideoItem): Promise<boolean> {
+    const group = await this.resolveGroup(video);
+    if (group.folderPath === this.root) return false;
+    const id = uid("trashgroup");
+    const trashPath = normalizePath(`${this.trashGroupDir}/${id}`);
+    try {
+      await this.ensureFolder(this.trashGroupDir);
+      await this.app.vault.adapter.rename(group.folderPath, trashPath);
+    } catch {
+      return false;
+    }
+    this.plugin.data.trashGroups.unshift({
+      id,
+      videoId: video.id,
+      videoTitle: video.title,
+      groupId: group.id,
+      title: group.title,
+      notePath: group.notePath,
+      folderPath: group.folderPath,
+      trashPath,
+      coverPath: group.coverPath,
+      deletedAt: Date.now()
+    });
+    this.plugin.data.noteGroups = this.plugin.data.noteGroups.filter((item) => item.id !== group.id);
+    video.notePath = undefined;
+    video.noteFolder = undefined;
+    video.noteCoverPath = undefined;
+    await this.plugin.persist();
+    await this.syncPreview(video);
+    return true;
+  }
+
+  async restoreGroup(id: string): Promise<boolean> {
+    const record = this.plugin.data.trashGroups.find((item) => item.id === id);
+    if (!record) return false;
+    const video = this.plugin.data.videos.find((item) => item.id === record.videoId);
+    if (!video) return false;
+    try {
+      if (await this.app.vault.adapter.exists(record.folderPath)) {
+        const suffix = Date.now().toString(36);
+        record.folderPath = normalizePath(`${record.folderPath} ${suffix}`);
+        record.notePath = normalizePath(
+          `${record.folderPath}/${record.notePath.split("/").pop() || record.title + ".md"}`
+        );
+      }
+      const parent = record.folderPath.split("/").slice(0, -1).join("/");
+      if (parent) await this.ensureFolder(parent);
+      await this.app.vault.adapter.rename(record.trashPath, record.folderPath);
+    } catch {
+      return false;
+    }
+    const group: NoteGroup = {
+      id: record.groupId || uid("notegroup"),
+      videoId: record.videoId,
+      folderPath: record.folderPath,
+      notePath: record.notePath,
+      title: record.title,
+      coverPath: record.coverPath,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    this.plugin.data.noteGroups.push(group);
+    video.notePath = group.notePath;
+    video.noteFolder = group.folderPath;
+    this.plugin.data.trashGroups = this.plugin.data.trashGroups.filter((item) => item.id !== id);
+    await this.plugin.persist();
+    await this.syncPreview(video);
+    return true;
+  }
+
+  async purgeGroup(id: string): Promise<boolean> {
+    const record = this.plugin.data.trashGroups.find((item) => item.id === id);
+    if (!record) return false;
+    try {
+      await this.app.vault.adapter.rmdir(record.trashPath, true);
+    } catch {
+      // Ignore.
+    }
+    this.plugin.data.trashGroups = this.plugin.data.trashGroups.filter((item) => item.id !== id);
+    await this.plugin.persist();
+    return true;
+  }
+
   async trashImage(video: VideoItem, node: NoteNode, imagePath?: string): Promise<boolean> {
-    const source = imagePath || node.imagePath;
+    const source = imagePath || node.coverImage || node.imagePath;
     if (!source) return false;
     const group = await this.resolveGroup(video);
     const extension = source.split(".").pop()?.toLowerCase() || "png";
@@ -565,6 +859,7 @@ export class NoteStore {
       videoTitle: video.title,
       nodeId: node.id,
       time: node.time,
+      kind: source === (node.coverImage || node.imagePath) ? "cover" : "summary",
       path: source,
       trashPath,
       notePath: group.notePath,
@@ -575,10 +870,14 @@ export class NoteStore {
     const images = (node.images?.length ? node.images : node.imagePath ? [node.imagePath] : []).filter(
       (path) => path !== source
     );
+    const coverImage = node.coverImage === source ? undefined : node.coverImage || node.imagePath;
+    const summary = removeImageFromSummary(node.summary, source);
     await this.updateNode(video, {
       ...node,
+      summary,
       images,
-      imagePath: images[0]
+      coverImage,
+      imagePath: coverImage
     });
     await this.plugin.persist();
     return true;
@@ -602,7 +901,19 @@ export class NoteStore {
     if (node) {
       const images = [...(node.images?.length ? node.images : node.imagePath ? [node.imagePath] : [])];
       if (!images.includes(record.path)) images.push(record.path);
-      await this.updateNode(video, { ...node, images, imagePath: images[0] });
+      const coverImage =
+        record.kind === "cover" ? record.path : node.coverImage || node.imagePath;
+      const summary =
+        record.kind === "summary"
+          ? `${node.summary.trimEnd()}\n\n![[${record.path}]]`.trim()
+          : node.summary;
+      await this.updateNode(video, {
+        ...node,
+        summary,
+        images,
+        coverImage,
+        imagePath: coverImage
+      });
     }
     this.plugin.data.trashImages = this.plugin.data.trashImages.filter((item) => item.id !== id);
     try {
@@ -635,6 +946,9 @@ export class NoteStore {
     }
     for (const image of [...this.plugin.data.trashImages]) {
       await this.purgeImage(image.id);
+    }
+    for (const group of [...this.plugin.data.trashGroups]) {
+      await this.purgeGroup(group.id);
     }
     try {
       await this.app.vault.adapter.rmdir(this.trashDir, true);
@@ -679,6 +993,7 @@ export class NoteStore {
     const body = ordered.map((block) => block.lines.join("\n").trim()).join("\n\n");
     await this.writeGroup(group, `${header}\n\n${body}\n`);
     await this.plugin.persist();
+    await this.syncPreview(video);
   }
 
   async setNodeImages(video: VideoItem, node: NoteNode, images: string[]): Promise<void> {

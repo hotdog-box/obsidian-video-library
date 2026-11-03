@@ -555,3 +555,11 @@ npm run dev        # watch
 - `vault.on("modify")` 同步外部 Markdown 修改，但用 `noteWriteGuard` 防止自身写入循环。
 - 回收站多选删除要调用 `purgeTrash`/`purgeImage`。
 - 侧边栏有“视频笔记管理”按钮；卡片/列表有“打开笔记”按钮。
+
+### 10.8 分组/整篇删除/预览约束
+
+- 分组是 `NoteSection`，不是父时间节点；分组 `##`，卡片 `###`。
+- 整篇笔记回收依赖整个文件夹 rename；flat 模式暂不支持整篇文件夹移动。
+- `syncPreview` 覆盖视频编辑页的 preview；`previewFromNotes` 标记来源。
+- 自动截图是 `coverImage`，不是总结内图片；粘贴图片必须留在 summary Markdown 里。
+- 删除总结图片走 `trashImage(video,node,path)`，恢复会插回 summary。

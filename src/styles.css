@@ -6387,3 +6387,176 @@ button.vl-sidebar-notes-button:hover {
   color: var(--text-normal);
   border-color: var(--interactive-accent);
 }
+
+.vl-note-summary-preview {
+  max-height: 180px;
+  padding: 5px;
+  overflow-y: auto;
+  font-size: 10px;
+  background: var(--background-secondary);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.vl-note-summary-preview img,
+.vl-note-summary-markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.vl-note-inline-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.vl-note-inline-image-controls {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  gap: 2px;
+  padding: 1px;
+  background: rgb(0 0 0 / 58%);
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.vl-note-inline-image-wrap:hover .vl-note-inline-image-controls {
+  opacity: 1;
+}
+
+.vl-note-inline-image-controls .vl-note-action {
+  width: 20px;
+  height: 20px;
+  color: #fff;
+}
+
+.vl-note-summary-markdown p {
+  margin: 0 0 5px;
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.vl-note-summary-markdown h1,
+.vl-note-summary-markdown h2,
+.vl-note-summary-markdown h3 {
+  margin: 6px 0 3px;
+  font-size: 12px;
+}
+
+.vl-note-summary-markdown ul,
+.vl-note-summary-markdown ol {
+  padding-left: 18px;
+  margin: 3px 0;
+  font-size: 10px;
+}
+
+.vl-trash-section-title {
+  margin: 10px 0 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.vl-notes-trash-thumb.is-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-accent);
+  background: var(--background-secondary);
+}
+
+.vl-notes-trash-thumb.is-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.vl-notes-trash-row.is-whole {
+  border-color: color-mix(in srgb, var(--interactive-accent) 35%, var(--background-modifier-border));
+}
+
+.vl-note-section {
+  padding: 6px 0 2px;
+  margin: 8px 0 4px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.vl-note-section.is-drop-target {
+  background: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
+  outline: 2px dashed var(--interactive-accent);
+}
+
+.vl-note-section-head {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.vl-note-section-icon {
+  display: flex;
+  color: var(--text-accent);
+}
+
+.vl-note-section-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.vl-note-section-title {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.vl-note-section-summary {
+  padding: 2px 0 4px 17px;
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--text-faint);
+  white-space: pre-wrap;
+}
+
+.modal.vl-note-sections-modal {
+  width: min(620px, 94vw);
+}
+
+.vl-note-sections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 48vh;
+  overflow-y: auto;
+}
+
+.vl-note-section-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+  padding: 7px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+
+.vl-note-section-row .vl-text-input,
+.vl-note-section-row .vl-text-area {
+  grid-column: 1;
+}
+
+.vl-note-section-actions {
+  display: flex;
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  gap: 3px;
+  align-items: center;
+}
+
+.vl-note-section-add {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}

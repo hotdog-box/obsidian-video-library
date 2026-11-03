@@ -73,8 +73,17 @@ export interface NoteNode {
   summary: string;
   tags: string[];
   images?: string[];
+  coverImage?: string;
   imagePath?: string;
   parentId?: string;
+  groupId?: string;
+  createdAt: number;
+}
+
+export interface NoteSection {
+  id: string;
+  title: string;
+  summary: string;
   createdAt: number;
 }
 
@@ -106,10 +115,24 @@ export interface TrashImage {
   videoTitle: string;
   nodeId: string;
   time?: number;
+  kind?: "cover" | "summary";
   path: string;
   trashPath: string;
   notePath: string;
   folderPath: string;
+  deletedAt: number;
+}
+
+export interface TrashGroup {
+  id: string;
+  videoId: string;
+  videoTitle: string;
+  groupId: string;
+  title: string;
+  notePath: string;
+  folderPath: string;
+  trashPath: string;
+  coverPath?: string;
   deletedAt: number;
 }
 
@@ -222,6 +245,8 @@ export interface VideoItem {
   duration?: number;
   epId?: number;
   preview?: PreviewConfig;
+  previewFromNotes?: boolean;
+  noteSections?: NoteSection[];
   favorite?: boolean;
   pinned?: boolean;
   pinnedAt?: number;
@@ -251,6 +276,9 @@ export interface PluginSettings {
   noteAttachmentMode: NoteAttachmentMode;
   noteAttachmentFolder: string;
   noteScreenshotWidth: number;
+  notePreviewDuration: number;
+  notePreviewTotal: number;
+  notePreviewMax: number;
   noteMarkerShortcut: string;
   noteSummaryShortcut: string;
   bilibiliCookie: string;
@@ -269,6 +297,7 @@ export interface PluginData {
   noteGroups: NoteGroup[];
   trashNotes: TrashNote[];
   trashImages: TrashImage[];
+  trashGroups: TrashGroup[];
   settings: PluginSettings;
 }
 
@@ -324,6 +353,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   noteAttachmentMode: "subfolder",
   noteAttachmentFolder: "attachments",
   noteScreenshotWidth: 1920,
+  notePreviewDuration: 2,
+  notePreviewTotal: 10,
+  notePreviewMax: 300,
   noteMarkerShortcut: "Alt+M",
   noteSummaryShortcut: "Alt+G",
   bilibiliCookie: "",
@@ -346,6 +378,7 @@ export function createDefaultData(): PluginData {
     noteGroups: [],
     trashNotes: [],
     trashImages: [],
+    trashGroups: [],
     settings: {
       ...DEFAULT_SETTINGS,
       cloudAccounts: defaultCloudAccounts()

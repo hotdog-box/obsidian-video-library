@@ -1,7 +1,7 @@
 import { App, Modal, Notice, setIcon } from "obsidian";
 import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
-import type { TrashImage, TrashNote } from "../types";
+import type { TrashGroup, TrashImage, TrashNote } from "../types";
 import { ConfirmModal } from "./common";
 
 function formatClock(seconds: number): string {
@@ -14,7 +14,7 @@ function formatClock(seconds: number): string {
   return `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
-interface TrashGroup {
+interface TrashSection {
   videoId: string;
   title: string;
   notes: TrashNote[];
@@ -80,8 +80,14 @@ export class TrashNotesModal extends Modal {
     clear.createSpan({ text: t("notes.clearTrash") });
     clear.addEventListener("click", () => this.confirmClear());
 
+    if (this.plugin.data.trashGroups.length > 0) {
+      contentEl.createEl("h4", { text: t("notes.trashWholeHeading"), cls: "vl-trash-section-title" });
+      const wholeList = contentEl.createDiv({ cls: "vl-notes-trash-list" });
+      for (const group of this.plugin.data.trashGroups) this.renderWholeGroup(wholeList, group);
+    }
+
     const groups = this.groups();
-    if (groups.length === 0) {
+    if (groups.length === 0 && this.plugin.data.trashGroups.length === 0) {
       contentEl.createDiv({ cls: "vl-notes-trash-empty", text: t("notes.trashEmpty") });
       return;
     }
@@ -90,8 +96,8 @@ export class TrashNotesModal extends Modal {
     for (const group of groups) this.renderGroup(list, group);
   }
 
-  private groups(): TrashGroup[] {
-    const map = new Map<string, TrashGroup>();
+  private groups(): TrashSection[] {
+    const map = new Map<string, TrashSection>();
     const query = this.search.trim().toLowerCase();
     for (const note of this.plugin.data.trashNotes) {
       const haystack = `${note.videoTitle} ${note.node.comment} ${note.node.summary}`.toLowerCase();
@@ -116,7 +122,45 @@ export class TrashNotesModal extends Modal {
     return [...map.values()].sort((a, b) => b.notes.length + b.images.length - (a.notes.length + a.images.length));
   }
 
-  private renderGroup(parent: HTMLElement, group: TrashGroup): void {
+  private renderWholeGroup(parent: HTMLElement, item: TrashGroup): void {
+    const row = parent.createDiv({ cls: "vl-notes-trash-row is-whole" });
+    const icon = row.createDiv({ cls: "vl-notes-trash-thumb is-icon" });
+    setIcon(icon, "notebook-pen");
+    const info = row.createDiv({ cls: "vl-notes-trash-info" });
+    info.createDiv({ cls: "vl-notes-trash-title", text: item.title || item.videoTitle });
+    info.createDiv({
+      cls: "vl-notes-trash-meta",
+      text: t("notes.wholeGroupMeta", { title: item.videoTitle })
+    });
+    const actions = row.createDiv({ cls: "vl-notes-trash-actions" });
+    this.actionButton(actions, "rotate-ccw", t("notes.restore"), false, () => {
+      void this.plugin.noteStore.restoreGroup(item.id).then(async (ok) => {
+        if (!ok) {
+          new Notice(t("notes.restoreFailed"));
+          return;
+        }
+        new Notice(t("notes.restored"));
+        this.onChanged();
+        this.render();
+      });
+    });
+    this.actionButton(actions, "trash-2", t("notes.purge"), true, () => {
+      new ConfirmModal(this.app, {
+        title: t("notes.purgeWholeTitle"),
+        description: t("notes.purgeWholeDesc", { title: item.title || item.videoTitle }),
+        confirmText: t("notes.purge"),
+        danger: true,
+        onConfirm: async () => {
+          await this.plugin.noteStore.purgeGroup(item.id);
+          new Notice(t("notes.purged"));
+          this.onChanged();
+          this.render();
+        }
+      }).open();
+    });
+  }
+
+  private renderGroup(parent: HTMLElement, group: TrashSection): void {
     const section = parent.createDiv({ cls: "vl-trash-group" });
     const head = section.createDiv({ cls: "vl-trash-group-head" });
     const toggle = head.createEl("button", {
@@ -273,7 +317,10 @@ export class TrashNotesModal extends Modal {
   }
 
   private confirmClear(): void {
-    const total = this.plugin.data.trashNotes.length + this.plugin.data.trashImages.length;
+    const total =
+      this.plugin.data.trashNotes.length +
+      this.plugin.data.trashImages.length +
+      this.plugin.data.trashGroups.length;
     if (total === 0) return;
     new ConfirmModal(this.app, {
       title: t("notes.clearTrashTitle"),

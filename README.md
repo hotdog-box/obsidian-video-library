@@ -34,6 +34,7 @@ See the Chinese sections below for the complete feature list and usage notes.
 > 已在 Obsidian `1.15.0`（Windows 桌面版）实际测试通过。
 > 插件类型：仅桌面端。
 > 最新功能提交：`20fbdc5`（`main`）；文档更新提交见 `git log`。
+> 发布版本：[0.9.0 Release](https://github.com/hotdog-box/obsidian-video-library/releases/tag/0.9.0)。
 
 ### 交接状态
 

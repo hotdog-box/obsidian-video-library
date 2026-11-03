@@ -1204,22 +1204,23 @@ export class VideoLibraryView extends ItemView {
   }
 
   private toggleTagFilter(name: string): void {
-    if (this.selectedTags.has(name)) {
-      this.selectedTags.delete(name);
-      this.updateTagFilterUi();
-      this.renderGrid();
+    if (this.selectedTags.has(name)) this.selectedTags.delete(name);
+    else this.selectedTags.add(name);
+    if (this.selectedTags.size > 0) {
+      this.filter = "all";
+      this.currentFolderId = null;
+      this.updateNavActive();
+      this.render();
       return;
     }
-    this.showTagAcrossAll(name);
+    this.updateTagFilterUi();
+    this.renderGrid();
   }
 
   private showTagAcrossAll(name: string): void {
+    this.selectedTags.add(name);
     this.filter = "all";
     this.currentFolderId = null;
-    this.selectedTags.clear();
-    this.selectedTags.add(name);
-    this.query = "";
-    if (this.searchInput) this.searchInput.value = "";
     this.updateNavActive();
     this.render();
   }
@@ -1742,7 +1743,7 @@ export class VideoLibraryView extends ItemView {
         ) {
           return false;
         }
-        if (this.filter === "all") {
+        if (this.filter === "all" && this.selectedTags.size === 0) {
           const folderId = video.folderId || null;
           if (folderId !== (this.currentFolderId || null)) return false;
         }
@@ -1789,7 +1790,7 @@ export class VideoLibraryView extends ItemView {
     if (!this.gridWrap) return;
     const videos = this.filteredVideos();
     const folders =
-      this.filter === "all" && !this.query.trim()
+      this.filter === "all" && this.selectedTags.size === 0 && !this.query.trim()
         ? this.plugin.getSubfolders(this.currentFolderId)
         : [];
     const pinned = videos

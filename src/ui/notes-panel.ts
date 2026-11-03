@@ -81,6 +81,18 @@ export class NotesPanel {
     this.toolButton(toolbar, "list-tree", t("notes.manageSections"), () => {
       new NoteSectionsModal(this.app, this.plugin, this.video, () => void this.reload()).open();
     });
+    this.toolButton(toolbar, "chevrons-down-up", t("notes.expandAll"), () => {
+      this.manualCollapse.clear();
+      this.collapsed.clear();
+      this.render();
+    });
+    this.toolButton(toolbar, "chevrons-up-down", t("notes.collapseAll"), () => {
+      for (const node of this.nodes) {
+        this.manualCollapse.add(node.id);
+        this.collapsed.add(node.id);
+      }
+      this.render();
+    });
 
     this.panelEl.createDiv({
       cls: "vl-notes-hint",

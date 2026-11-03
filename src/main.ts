@@ -1,21 +1,30 @@
-import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
+import { Notice, Plugin, requestUrl, TFile, WorkspaceLeaf } from "obsidian";
 import { CoverStore } from "./covers";
 import { setLanguage, t } from "./i18n";
+import { cloudHeaders, testCloudAccount as testCloudAccountRequest } from "./cloud";
+import { NoteStore } from "./notes";
+import { StreamServer } from "./stream-server";
+import { fetchLatestRelease, isNewerVersion, type UpdateRelease } from "./updates";
 import { normalizeUrlInput, parseVideoUrl, fallbackTitleFromUrl } from "./providers";
 import {
   Category,
   CardSize,
+  CloudAccount,
+  CloudProvider,
   createDefaultData,
   DATA_VERSION,
+  defaultCloudAccounts,
   DEFAULT_MARKERS,
   Folder,
   LanguageSetting,
   Marker,
   MarkerKind,
+  NoteGroup,
   PluginData,
   Provider,
   sanitizePreviewConfig,
   SortMode,
+  TrashNote,
   Tag,
   TAG_COLORS,
   TagMatchMode,
@@ -35,6 +44,9 @@ import {
 import { VideoLibraryView, VIEW_TYPE } from "./ui/library-view";
 import { VideoEditModal } from "./ui/video-modal";
 import { VideoLibrarySettingTab } from "./ui/settings-tab";
+import { VideoPlayerModal } from "./ui/player-modal";
+import { NotesView, NOTES_VIEW_TYPE } from "./ui/notes-view";
+import { CloudAddModal } from "./ui/cloud-add-modal";
 
 export type CategoryMutationResult =
   | { ok: true; category: Category }
@@ -50,6 +62,7 @@ interface FsLike {
   existsSync: (path: string) => boolean;
   mkdirSync: (path: string, options?: { recursive?: boolean }) => void;
   unlinkSync: (path: string) => void;
+  writeFileSync: (path: string, data: Uint8Array) => void;
   linkSync: (existingPath: string, newPath: string) => void;
   copyFileSync: (existingPath: string, newPath: string) => void;
   statSync?: (path: string) => { size: number; isFile: () => boolean };
@@ -139,6 +152,11 @@ export type FolderMutationResult =
 export default class VideoLibraryPlugin extends Plugin {
   data: PluginData = createDefaultData();
   coverStore!: CoverStore;
+  noteStore!: NoteStore;
+  streamServer = new StreamServer();
+  latestRelease: UpdateRelease | null = null;
+  updateChecking = false;
+  updateInstalling = false;
   private metaTubeProcess: ChildProcessLike | null = null;
   private undoStack: PluginData[] = [];
   private coverQueue: string[] = [];
@@ -151,11 +169,37 @@ export default class VideoLibraryPlugin extends Plugin {
 
     const pluginDir = this.manifest.dir || `${this.app.vault.configDir}/plugins/video-library`;
     this.coverStore = new CoverStore(this.app, pluginDir);
+    this.noteStore = new NoteStore(this.app, this);
+    void this.streamServer.start().catch((error) => {
+      console.warn("video-library: local stream server failed", error);
+    });
 
     this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => new VideoLibraryView(leaf, this));
+    this.registerView(NOTES_VIEW_TYPE, (leaf: WorkspaceLeaf) => new NotesView(leaf, this));
+
+    this.registerObsidianProtocolHandler("video-library", (params) => {
+      if (params.action !== "play") return;
+      const video = this.data.videos.find((candidate) => candidate.id === params.video);
+      if (!video) return;
+      const time = Number(params.t) || 0;
+      this.focusMainWindow();
+      new VideoPlayerModal(this.app, this, video, { startTime: time, openNotes: true }).open();
+    });
 
     this.addRibbonIcon("film", t("app.name"), () => {
       void this.openView();
+    });
+
+    this.addRibbonIcon("notebook-pen", t("notes.title"), () => {
+      void this.openNotesView();
+    });
+
+    this.addCommand({
+      id: "open-notes",
+      name: t("notes.openManager"),
+      callback: () => {
+        void this.openNotesView();
+      }
     });
 
     this.addCommand({
@@ -175,6 +219,14 @@ export default class VideoLibraryPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "add-cloud-video",
+      name: t("cloud.addVideo"),
+      callback: () => {
+        new CloudAddModal(this.app, this).open();
+      }
+    });
+
+    this.addCommand({
       id: "undo",
       name: t("action.undo"),
       callback: () => {
@@ -183,10 +235,15 @@ export default class VideoLibraryPlugin extends Plugin {
     });
 
     this.addSettingTab(new VideoLibrarySettingTab(this.app, this));
+
+    if (this.data.settings.autoCheckUpdates) {
+      window.setTimeout(() => void this.checkForUpdates(false), 5000);
+    }
   }
 
   onunload(): void {
     this.coverStore?.dispose();
+    this.streamServer.stop();
   }
 
   async openView(): Promise<void> {
@@ -195,6 +252,30 @@ export default class VideoLibraryPlugin extends Plugin {
     if (!leaf) {
       leaf = this.app.workspace.getLeaf(true);
       await leaf.setViewState({ type: VIEW_TYPE, active: true });
+    }
+    await this.app.workspace.revealLeaf(leaf);
+  }
+
+  focusMainWindow(): void {
+    try {
+      const win = this.app.workspace.containerEl.ownerDocument.defaultView as
+        | (Window & { activeWindow?: Window; activeDocument?: Document })
+        | null;
+      if (!win) return;
+      win.activeWindow = win;
+      win.activeDocument = win.document;
+      win.focus();
+    } catch {
+      // Ignore focus failures; Obsidian still opens the modal in the active window.
+    }
+  }
+
+  async openNotesView(): Promise<void> {
+    const existing = this.app.workspace.getLeavesOfType(NOTES_VIEW_TYPE);
+    let leaf = existing[0];
+    if (!leaf) {
+      leaf = this.app.workspace.getLeaf(true);
+      await leaf.setViewState({ type: NOTES_VIEW_TYPE, active: true });
     }
     await this.app.workspace.revealLeaf(leaf);
   }
@@ -360,6 +441,15 @@ export default class VideoLibraryPlugin extends Plugin {
                 : undefined,
               scrapedAt: Number(video.scrapedAt) || undefined,
               localExternal: Boolean(video.localExternal),
+              cloudProvider:
+                video.cloudProvider &&
+                ["baidu", "quark", "aliyun", "onedrive"].includes(String(video.cloudProvider))
+                  ? (String(video.cloudProvider) as CloudProvider)
+                  : undefined,
+              streamUrl: video.streamUrl ? String(video.streamUrl).trim() || undefined : undefined,
+              notePath: video.notePath ? String(video.notePath) : undefined,
+              noteFolder: video.noteFolder ? String(video.noteFolder) : undefined,
+              noteCoverPath: video.noteCoverPath ? String(video.noteCoverPath) : undefined,
               title: video.title || (video.url ? fallbackTitleFromUrl(video.url) : t("form.untitled")),
               categoryId:
                 video.categoryId && categoryIds.has(video.categoryId) ? video.categoryId : UNCATEGORIZED_ID,
@@ -374,6 +464,36 @@ export default class VideoLibraryPlugin extends Plugin {
               updatedAt: Number(video.updatedAt) || Number(video.createdAt) || Date.now()
             };
           })
+      : [];
+
+    const noteGroups: NoteGroup[] = Array.isArray(loaded.noteGroups)
+      ? loaded.noteGroups
+          .filter((group): group is NoteGroup => Boolean(group && group.videoId && group.notePath))
+          .map((group) => ({
+            id: String(group.id || uid("notegroup")),
+            videoId: String(group.videoId),
+            folderPath: String(group.folderPath || ""),
+            notePath: String(group.notePath),
+            title: String(group.title || ""),
+            coverPath: group.coverPath ? String(group.coverPath) : undefined,
+            createdAt: Number(group.createdAt) || Date.now(),
+            updatedAt: Number(group.updatedAt) || Date.now()
+          }))
+      : [];
+
+    const trashNotes: TrashNote[] = Array.isArray(loaded.trashNotes)
+      ? loaded.trashNotes
+          .filter((trash): trash is TrashNote => Boolean(trash && trash.id && trash.block && trash.videoId))
+          .map((trash) => ({
+            id: String(trash.id),
+            videoId: String(trash.videoId),
+            videoTitle: String(trash.videoTitle || ""),
+            notePath: String(trash.notePath || ""),
+            folderPath: String(trash.folderPath || ""),
+            block: String(trash.block),
+            node: trash.node,
+            deletedAt: Number(trash.deletedAt) || Date.now()
+          }))
       : [];
 
     const settings = {
@@ -393,6 +513,44 @@ export default class VideoLibraryPlugin extends Plugin {
       typeof settings.metatubeServerPath === "string" ? settings.metatubeServerPath.trim() : "";
     settings.scrapeAuto = Boolean(settings.scrapeAuto);
     if (typeof settings.relatedEnabled !== "boolean") settings.relatedEnabled = true;
+    settings.notesRoot =
+      typeof settings.notesRoot === "string" && settings.notesRoot.trim()
+        ? settings.notesRoot.trim()
+        : "视频笔记";
+    settings.noteAttachmentMode =
+      settings.noteAttachmentMode === "same" || settings.noteAttachmentMode === "custom"
+        ? settings.noteAttachmentMode
+        : "subfolder";
+    settings.noteAttachmentFolder =
+      typeof settings.noteAttachmentFolder === "string" && settings.noteAttachmentFolder.trim()
+        ? settings.noteAttachmentFolder.trim()
+        : "attachments";
+    settings.noteMarkerShortcut =
+      typeof settings.noteMarkerShortcut === "string" && settings.noteMarkerShortcut.trim()
+        ? settings.noteMarkerShortcut.trim()
+        : "Alt+M";
+    settings.noteSummaryShortcut =
+      typeof settings.noteSummaryShortcut === "string" && settings.noteSummaryShortcut.trim()
+        ? settings.noteSummaryShortcut.trim()
+        : "Alt+G";
+    settings.bilibiliCookie =
+      typeof settings.bilibiliCookie === "string" ? settings.bilibiliCookie.trim() : "";
+    settings.bilibiliUser =
+      typeof settings.bilibiliUser === "string" ? settings.bilibiliUser.trim() : "";
+    settings.autoCheckUpdates = settings.autoCheckUpdates !== false;
+    const accounts = defaultCloudAccounts();
+    const loadedAccounts = (settings.cloudAccounts || {}) as Partial<Record<CloudProvider, Partial<CloudAccount>>>;
+    for (const provider of Object.keys(accounts) as CloudProvider[]) {
+      const raw = loadedAccounts[provider];
+      accounts[provider] = {
+        provider,
+        enabled: Boolean(raw?.enabled),
+        credential: typeof raw?.credential === "string" ? raw.credential : "",
+        displayName: raw?.displayName ? String(raw.displayName) : undefined,
+        updatedAt: Number(raw?.updatedAt) || undefined
+      };
+    }
+    settings.cloudAccounts = accounts;
     if (markersMigrated) tagsMigrated = true;
 
     this.data = {
@@ -402,6 +560,8 @@ export default class VideoLibraryPlugin extends Plugin {
       videos,
       tags,
       markers,
+      noteGroups,
+      trashNotes,
       settings
     };
 
@@ -446,6 +606,78 @@ export default class VideoLibraryPlugin extends Plugin {
       const view = leaf.view;
       if (view instanceof VideoLibraryView) view.refresh();
     }
+    for (const leaf of this.app.workspace.getLeavesOfType(NOTES_VIEW_TYPE)) {
+      const view = leaf.view;
+      if (view instanceof NotesView) void view.refresh();
+    }
+  }
+
+  async checkForUpdates(manual = true): Promise<boolean> {
+    if (this.updateChecking) return false;
+    this.updateChecking = true;
+    try {
+      const release = await fetchLatestRelease();
+      this.latestRelease = release;
+      if (!release) {
+        if (manual) new Notice(t("update.checkFailed"));
+        return false;
+      }
+      const newer = isNewerVersion(release.tag_name, this.manifest.version);
+      if (newer) {
+        new Notice(t("update.available", { version: release.tag_name }), 10000);
+      } else if (manual) {
+        new Notice(t("update.upToDate", { version: this.manifest.version }));
+      }
+      return newer;
+    } catch (error) {
+      if (manual) new Notice(t("update.checkFailed"));
+      console.warn("video-library: update check failed", error);
+      return false;
+    } finally {
+      this.updateChecking = false;
+      this.refreshViews();
+    }
+  }
+
+  async installUpdate(): Promise<boolean> {
+    if (this.updateInstalling) return false;
+    const release = this.latestRelease;
+    if (!release || !isNewerVersion(release.tag_name, this.manifest.version)) {
+      new Notice(t("update.upToDate", { version: this.manifest.version }));
+      return false;
+    }
+    const fs = getNodeFs();
+    const nodePath = getNodePath();
+    const base = this.pluginAbsolutePath();
+    if (!fs?.writeFileSync || !nodePath?.join || !base) {
+      new Notice(t("update.installFailed"));
+      return false;
+    }
+    this.updateInstalling = true;
+    try {
+      for (const name of ["main.js", "styles.css", "manifest.json"]) {
+        const asset = release.assets.find((candidate) => candidate.name === name);
+        if (!asset) continue;
+        const response = await requestUrl({ url: asset.browser_download_url, method: "GET" });
+        fs.writeFileSync(nodePath.join(base, name), new Uint8Array(response.arrayBuffer));
+      }
+      new Notice(t("update.installed"), 10000);
+      window.setTimeout(() => window.location.reload(), 900);
+      return true;
+    } catch (error) {
+      console.warn("video-library: update install failed", error);
+      new Notice(t("update.installFailed"));
+      return false;
+    } finally {
+      this.updateInstalling = false;
+    }
+  }
+
+  async logoutBilibili(): Promise<void> {
+    this.data.settings.bilibiliCookie = "";
+    this.data.settings.bilibiliUser = "";
+    await this.persist();
+    this.refreshViews();
   }
 
   async setLanguageSetting(language: LanguageSetting): Promise<void> {
@@ -504,6 +736,34 @@ export default class VideoLibraryPlugin extends Plugin {
     await this.persist();
     this.refreshViews();
     return { ok: true, category };
+  }
+
+  sourceCategoryName(video: VideoItem): string {
+    if (video.provider === "cloud" && video.cloudProvider) {
+      return t(`source.${video.cloudProvider}` as never);
+    }
+    if (video.provider === "bilibili") return t("source.bilibili");
+    if (video.provider === "youtube") return t("source.youtube");
+    if (video.provider === "vimeo") return t("source.vimeo");
+    if (video.provider === "web") return t("source.web");
+    return "";
+  }
+
+  private ensureSourceCategory(video: VideoItem): string {
+    const name = this.sourceCategoryName(video);
+    if (!name) return video.categoryId;
+    const existing = this.data.categories.find(
+      (category) => category.name.toLowerCase() === name.toLowerCase()
+    );
+    if (existing) return existing.id;
+    const category: Category = {
+      id: uid("cat"),
+      name,
+      color: video.provider === "cloud" ? "#4f9dd9" : video.provider === "bilibili" ? "#fb7299" : "#ff5c5c",
+      createdAt: Date.now()
+    };
+    this.data.categories.push(category);
+    return category.id;
   }
 
   async renameCategory(id: string, name: string): Promise<CategoryMutationResult> {
@@ -1212,11 +1472,14 @@ export default class VideoLibraryPlugin extends Plugin {
   async addVideo(video: VideoItem): Promise<void> {
     this.recordUndo();
     this.ensureAutoMarker(video);
+    if (!video.categoryId || video.categoryId === UNCATEGORIZED_ID) {
+      video.categoryId = this.ensureSourceCategory(video);
+    }
     await this.ensureExternalLink(video);
     this.data.videos.unshift(video);
     await this.persist();
     this.refreshViews();
-    if (video.provider !== "local") {
+    if (video.provider !== "local" && video.provider !== "cloud") {
       window.setTimeout(() => void this.autoScrapeVideo(video.id), 1200);
     }
   }
@@ -1607,7 +1870,45 @@ export default class VideoLibraryPlugin extends Plugin {
     }
   }
 
+  cloudAccount(provider: CloudProvider): CloudAccount | undefined {
+    return this.data.settings.cloudAccounts[provider];
+  }
+
+  async connectCloudAccount(
+    provider: CloudProvider,
+    credential: string
+  ): Promise<{ ok: boolean; name?: string; error?: string }> {
+    const result = await testCloudAccountRequest(provider, credential);
+    if (!result.ok) return result;
+    const account = this.data.settings.cloudAccounts[provider];
+    account.enabled = true;
+    account.credential = credential.trim();
+    account.displayName = result.name;
+    account.updatedAt = Date.now();
+    await this.persist();
+    this.refreshViews();
+    return result;
+  }
+
+  async disconnectCloudAccount(provider: CloudProvider): Promise<void> {
+    const account = this.data.settings.cloudAccounts[provider];
+    account.enabled = false;
+    account.credential = "";
+    account.displayName = undefined;
+    await this.persist();
+    this.refreshViews();
+  }
+
   getVideoSource(video: VideoItem): string | null {
+    if (video.provider === "cloud") {
+      const remote = video.streamUrl || video.url || null;
+      if (!remote) return null;
+      const account = video.cloudProvider ? this.data.settings.cloudAccounts[video.cloudProvider] : undefined;
+      if (video.cloudProvider && account?.credential && this.streamServer.ready) {
+        return this.streamServer.urlFor(remote, cloudHeaders(video.cloudProvider, account.credential));
+      }
+      return remote;
+    }
     if (video.provider === "local") {
       if (!video.localPath) return null;
       if (video.localExternal) {

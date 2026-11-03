@@ -1,9 +1,11 @@
 import { App, Modal, Notice, setIcon } from "obsidian";
+import { resolveBilibiliStream } from "../bilibili";
 import { formatDuration, providerName, t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import { buildEmbedUrl, parseVideoUrl } from "../providers";
-import type { PreviewClip, VideoItem } from "../types";
+import type { NoteNode, PreviewClip, VideoItem } from "../types";
 import { ConfirmModal, formatDate, formatFileSize, openExternal } from "./common";
+import { NotesPanel } from "./notes-panel";
 import { ScrapeModal } from "./scrape-modal";
 import { VideoEditModal } from "./video-modal";
 
@@ -54,36 +56,165 @@ export class VideoPlayerModal extends Modal {
   private hoverTimer = 0;
   private hoverSeq = 0;
 
+  private notesHost: HTMLElement | null = null;
+  private notesPanel: NotesPanel | null = null;
+  private noteMarkersEl: HTMLElement | null = null;
+  private noteNodes: NoteNode[] = [];
+  private audioEl: HTMLAudioElement | null = null;
+  private startTime = 0;
+  private startApplied = false;
+
   constructor(
     app: App,
     private plugin: VideoLibraryPlugin,
-    private item: VideoItem
+    private item: VideoItem,
+    options: { startTime?: number; openNotes?: boolean } = {}
   ) {
     super(app);
+    this.startTime = options.startTime || 0;
+    this.openNotesRequested = Boolean(options.openNotes);
     this.modalEl.addClass("vl-player-modal");
+    if (options.openNotes) this.modalEl.addClass("has-notes");
   }
+
+  private openNotesRequested = false;
 
   onOpen(): void {
     this.titleEl.setText(this.item.title || t("misc.untitled"));
     this.render();
+    this.addResizeHandle();
+    this.keyHandler = (event: KeyboardEvent) => this.onShortcut(event);
+    document.addEventListener("keydown", this.keyHandler, true);
+    if (this.startTime > 0) {
+      for (const delay of [0, 180, 450, 900, 1600]) {
+        window.setTimeout(() => this.applyStartSeek(), delay);
+      }
+    }
+  }
+
+  private applyStartSeek(): void {
+    if (this.startApplied || this.startTime <= 0) return;
+    const video = this.videoEl;
+    if (!video || video.readyState < 1) return;
+    try {
+      const target =
+        Number.isFinite(video.duration) && video.duration > 0
+          ? Math.min(this.startTime, Math.max(0, video.duration - 0.15))
+          : this.startTime;
+      video.currentTime = target;
+      if (this.audioEl) this.audioEl.currentTime = target;
+      if (Math.abs(video.currentTime - target) < 1.5) this.startApplied = true;
+    } catch {
+      // Metadata may not be ready; the next scheduled attempt retries.
+    }
+  }
+
+  private keyHandler: ((event: KeyboardEvent) => void) | null = null;
+
+  private onShortcut(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (
+      target &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable)
+    ) {
+      return;
+    }
+    if (this.matchesShortcut(event, this.plugin.data.settings.noteMarkerShortcut || "Alt+M")) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!this.notesPanel) {
+        this.toggleNotes(true);
+        window.setTimeout(() => void this.notesPanel?.markCurrent(), 160);
+      } else {
+        void this.notesPanel.markCurrent();
+      }
+      return;
+    }
+    if (this.matchesShortcut(event, this.plugin.data.settings.noteSummaryShortcut || "Alt+G")) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!this.notesPanel) {
+        this.toggleNotes(true);
+        window.setTimeout(() => void this.notesPanel?.insertSummary(), 160);
+      } else {
+        void this.notesPanel.insertSummary();
+      }
+    }
+  }
+
+  private matchesShortcut(event: KeyboardEvent, shortcut: string): boolean {
+    const parts = shortcut
+      .split("+")
+      .map((part) => part.trim().toLowerCase())
+      .filter(Boolean);
+    if (parts.length === 0) return false;
+    const key = parts[parts.length - 1];
+    const needsAlt = parts.includes("alt");
+    const needsCtrl = parts.includes("ctrl") || parts.includes("control");
+    const needsShift = parts.includes("shift");
+    const needsMeta = parts.includes("meta") || parts.includes("cmd") || parts.includes("command");
+    return (
+      event.key.toLowerCase() === key &&
+      event.altKey === needsAlt &&
+      event.ctrlKey === needsCtrl &&
+      event.shiftKey === needsShift &&
+      event.metaKey === needsMeta
+    );
+  }
+
+  private addResizeHandle(): void {
+    const handle = this.modalEl.createDiv({ cls: "vl-player-resize-handle" });
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      const rect = this.modalEl.getBoundingClientRect();
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const startWidth = rect.width;
+      const startHeight = rect.height;
+      const move = (next: PointerEvent): void => {
+        const width = Math.min(window.innerWidth - 24, Math.max(460, startWidth + next.clientX - startX));
+        const height = Math.min(window.innerHeight - 24, Math.max(320, startHeight + next.clientY - startY));
+        this.modalEl.setCssStyles({ width: `${width}px`, height: `${height}px` });
+      };
+      const stop = (): void => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", stop);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", stop, { once: true });
+    });
   }
 
   private render(): void {
     const { contentEl } = this;
     contentEl.empty();
 
-    const player = contentEl.createDiv({ cls: "vl-player-stage" });
+    const layout = contentEl.createDiv({ cls: "vl-player-layout" });
+    const main = layout.createDiv({ cls: "vl-player-main" });
+
+    const player = main.createDiv({ cls: "vl-player-stage" });
     this.stageEl = player;
     this.renderPlayer(player);
 
     if (this.item.provider === "bilibili" && this.item.epId) {
-      contentEl.createEl("p", { text: t("player.bilibiliRestricted"), cls: "vl-player-notice" });
+      main.createEl("p", { text: t("player.bilibiliRestricted"), cls: "vl-player-notice" });
     }
 
-    this.detailsEl = contentEl.createDiv({ cls: "vl-player-details" });
+    this.detailsEl = main.createDiv({ cls: "vl-player-details" });
     this.renderDetails();
 
-    const footer = contentEl.createDiv({ cls: "vl-modal-buttons vl-player-footer" });
+    const footer = main.createDiv({ cls: "vl-modal-buttons vl-player-footer" });
+    const notes = footer.createEl("button", {
+      cls: "vl-player-notes-toggle",
+      attr: { type: "button" }
+    });
+    setIcon(notes.createSpan({ cls: "vl-btn-icon" }), "notebook-pen");
+    notes.createSpan({ text: t("notes.toggle") });
+    notes.addEventListener("click", () => this.toggleNotes());
+
     if (this.item.url) {
       const open = footer.createEl("button", { attr: { type: "button" } });
       setIcon(open.createSpan({ cls: "vl-btn-icon" }), "external-link");
@@ -120,6 +251,11 @@ export class VideoPlayerModal extends Modal {
         }
       }).open();
     });
+
+    this.notesHost = layout.createDiv({ cls: "vl-player-notes-host" });
+    if (this.openNotesRequested) {
+      window.setTimeout(() => this.toggleNotes(true), 120);
+    }
   }
 
   private infoRow(parent: HTMLElement, label: string, value: string): HTMLElement {
@@ -523,7 +659,12 @@ export class VideoPlayerModal extends Modal {
   private renderPlayer(container: HTMLElement): void {
     const source = this.plugin.getVideoSource(this.item);
 
-    if (this.item.provider === "local" || this.item.provider === "direct") {
+    if (this.item.provider === "bilibili") {
+      void this.renderBilibiliNative(container);
+      return;
+    }
+
+    if (this.item.provider === "local" || this.item.provider === "direct" || this.item.provider === "cloud") {
       if (!source) {
         this.renderUnavailable(container, t("player.localMissing"), t("player.localMissingDesc"));
         return;
@@ -544,6 +685,10 @@ export class VideoPlayerModal extends Modal {
       return;
     }
 
+    this.renderEmbed(container);
+  }
+
+  private renderEmbed(container: HTMLElement): void {
     const parsed = this.item.url ? parseVideoUrl(this.item.url) : null;
     const bangumiEpisode = this.item.provider === "bilibili" ? this.item.epId || parsed?.epId : undefined;
     const embed = bangumiEpisode
@@ -570,13 +715,88 @@ export class VideoPlayerModal extends Modal {
     });
   }
 
+  private async renderBilibiliNative(container: HTMLElement): Promise<void> {
+    const loading = container.createDiv({ cls: "vl-player-loading" });
+    loading.createDiv({ cls: "vl-player-loading-spinner" });
+    loading.createDiv({ text: t("player.bilibiliLoading") });
+    try {
+      await this.plugin.streamServer.start();
+      const info = await resolveBilibiliStream(
+        this.item,
+        this.plugin.data.settings.bilibiliCookie,
+        this.plugin.streamServer
+      );
+      if (!info || !this.stageEl) {
+        loading.remove();
+        this.renderEmbed(container);
+        return;
+      }
+      loading.remove();
+      this.setupNativePlayer(container, info.videoUrl, info.audioUrl, true);
+      if (info.quality) {
+        const badge = container.createDiv({ cls: "vl-player-quality-badge", text: info.quality });
+        badge.setAttribute("title", t("player.bilibiliQuality"));
+      }
+    } catch (error) {
+      console.warn("video-library: Bilibili native playback failed", error);
+      loading.remove();
+      this.renderEmbed(container);
+    }
+  }
+
+  private setupNativePlayer(
+    container: HTMLElement,
+    videoUrl: string,
+    audioUrl?: string,
+    crossOrigin = false
+  ): void {
+    const frame = container.createDiv({ cls: "vl-player-frame" });
+    this.videoEl = frame.createEl("video", {
+      cls: "vl-native-video",
+      attr: { autoplay: "true", playsinline: "true", preload: "metadata" }
+    });
+    if (crossOrigin) this.videoEl.crossOrigin = "anonymous";
+    this.videoEl.src = videoUrl;
+
+    if (audioUrl) {
+      this.audioEl = container.createEl("audio", {
+        cls: "vl-native-audio",
+        attr: { preload: "auto" }
+      });
+      this.audioEl.src = audioUrl;
+      this.audioEl.volume = 0.8;
+      this.videoEl.muted = true;
+      this.videoEl.volume = 0;
+    }
+
+    this.buildControls(container, this.videoEl);
+    this.wireVideo(this.videoEl);
+  }
+
   private wireVideo(video: HTMLVideoElement): void {
-    video.addEventListener("loadedmetadata", () => this.syncDuration());
+    video.addEventListener("loadedmetadata", () => {
+      this.syncDuration();
+      this.applyStartSeek();
+    });
     video.addEventListener("durationchange", () => this.syncDuration());
-    video.addEventListener("timeupdate", () => this.updateProgress());
+    video.addEventListener("timeupdate", () => {
+      this.updateProgress();
+      this.syncAudio();
+    });
     video.addEventListener("progress", () => this.updateProgress());
-    video.addEventListener("play", () => this.updatePlayButton());
-    video.addEventListener("pause", () => this.updatePlayButton());
+    video.addEventListener("play", () => {
+      this.updatePlayButton();
+      if (this.audioEl) void this.audioEl.play().catch(() => undefined);
+    });
+    video.addEventListener("pause", () => {
+      this.updatePlayButton();
+      this.audioEl?.pause();
+    });
+    video.addEventListener("seeking", () => this.syncAudio(true));
+    video.addEventListener("seeked", () => this.syncAudio(true));
+    video.addEventListener("ratechange", () => {
+      if (this.audioEl) this.audioEl.playbackRate = video.playbackRate;
+    });
     video.addEventListener("volumechange", () => this.updateVolumeUi());
     video.addEventListener("error", () => this.showPlaybackError());
     video.addEventListener("click", () => this.togglePlay());
@@ -604,6 +824,7 @@ export class VideoPlayerModal extends Modal {
     this.progressEl = timeline.createDiv({ cls: "vl-player-progress" });
     this.thumbEl = timeline.createDiv({ cls: "vl-player-thumb" });
     this.markersEl = timeline.createDiv({ cls: "vl-player-markers" });
+    this.noteMarkersEl = timeline.createDiv({ cls: "vl-player-note-markers" });
     this.bindTimeline(timeline, video);
     this.buildScrubPreview(container, video);
 
@@ -614,19 +835,24 @@ export class VideoPlayerModal extends Modal {
       attr: { type: "button", "aria-label": t("player.mute") }
     });
     this.muteButton.addEventListener("click", () => {
-      video.muted = !video.muted;
-      if (!video.muted && video.volume === 0) video.volume = 0.8;
+      const target = this.audioEl || video;
+      target.muted = !target.muted;
+      if (!target.muted && target.volume === 0) target.volume = 0.8;
+      this.updateVolumeUi();
     });
 
     this.volumeSlider = bar.createEl("input", {
       cls: "vl-player-volume",
       attr: { type: "range", min: "0", max: "1", step: "0.01", "aria-label": t("player.volume") }
     });
-    this.volumeSlider.value = String(video.volume);
+    this.volumeSlider.value = String((this.audioEl || video).volume);
     this.volumeSlider.addEventListener("input", () => {
       const volume = Math.min(1, Math.max(0, Number(this.volumeSlider?.value) || 0));
-      video.volume = volume;
-      video.muted = volume <= 0;
+      const target = this.audioEl || video;
+      target.volume = volume;
+      target.muted = volume <= 0;
+      if (this.audioEl) video.muted = true;
+      this.updateVolumeUi();
     });
 
     const fullscreen = bar.createEl("button", {
@@ -817,6 +1043,7 @@ export class VideoPlayerModal extends Modal {
       this.totalLabel?.setText(formatClock(actual));
       this.durationValueEl?.setText(formatDuration(actual) || "—");
       this.renderMarkers();
+      this.renderNoteMarkers();
       this.updateProgress();
       return;
     }
@@ -826,6 +1053,7 @@ export class VideoPlayerModal extends Modal {
       this.totalLabel?.setText(formatClock(this.duration));
       this.durationValueEl?.setText(formatDuration(this.duration) || "—");
       this.renderMarkers();
+      this.renderNoteMarkers();
     }
 
     if (this.triedDurationHack) return;
@@ -843,14 +1071,27 @@ export class VideoPlayerModal extends Modal {
         this.totalLabel?.setText(formatClock(this.duration));
         this.durationValueEl?.setText(formatDuration(this.duration) || "—");
         this.renderMarkers();
+        this.renderNoteMarkers();
       }
       try {
-        current.currentTime = 0;
+        current.currentTime = this.startTime > 0 ? this.startTime : 0;
       } catch {
         // Ignore; the player still works from the current position.
       }
       this.updateProgress();
     }, 140);
+  }
+
+  private syncAudio(force = false): void {
+    const audio = this.audioEl;
+    const video = this.videoEl;
+    if (!audio || !video) return;
+    if (Number.isFinite(audio.duration) && Number.isFinite(video.duration)) {
+      const drift = Math.abs(audio.currentTime - video.currentTime);
+      if (force || drift > 0.35) audio.currentTime = video.currentTime;
+    }
+    if (!video.paused && audio.paused) void audio.play().catch(() => undefined);
+    if (video.paused && !audio.paused) audio.pause();
   }
 
   private updateProgress(): void {
@@ -927,14 +1168,15 @@ export class VideoPlayerModal extends Modal {
 
   private updateVolumeUi(): void {
     const video = this.videoEl;
-    if (!video || !this.muteButton) return;
-    const muted = video.muted || video.volume <= 0;
-    setIcon(this.muteButton, muted ? "volume-x" : video.volume < 0.5 ? "volume-1" : "volume-2");
+    const target = this.audioEl || video;
+    if (!video || !target || !this.muteButton) return;
+    const muted = target.muted || target.volume <= 0;
+    setIcon(this.muteButton, muted ? "volume-x" : target.volume < 0.5 ? "volume-1" : "volume-2");
     const label = muted ? t("player.unmute") : t("player.mute");
     this.muteButton.setAttribute("aria-label", label);
     this.muteButton.setAttribute("title", label);
     if (this.volumeSlider && document.activeElement !== this.volumeSlider) {
-      this.volumeSlider.value = String(video.volume);
+      this.volumeSlider.value = String(target.volume);
     }
   }
 
@@ -943,8 +1185,10 @@ export class VideoPlayerModal extends Modal {
     if (!video) return;
     if (video.paused || video.ended) {
       void video.play().catch(() => new Notice(t("player.playFailed")));
+      if (this.audioEl) void this.audioEl.play().catch(() => undefined);
     } else {
       video.pause();
+      this.audioEl?.pause();
     }
   }
 
@@ -1005,7 +1249,88 @@ export class VideoPlayerModal extends Modal {
     }
   }
 
+  private toggleNotes(force?: boolean): void {
+    const open = force ?? !this.notesPanel;
+    if (!open) {
+      this.notesPanel?.destroy();
+      this.notesPanel = null;
+      this.notesHost?.empty();
+      this.modalEl.removeClass("has-notes");
+      return;
+    }
+    if (this.notesPanel) return;
+    if (!this.notesHost) return;
+    this.modalEl.addClass("has-notes");
+    this.notesHost.empty();
+    this.notesPanel = new NotesPanel(this.app, this.plugin, this.item, this, this.notesHost);
+    void this.notesPanel.open();
+  }
+
+  getVideoElement(): HTMLVideoElement | null {
+    return this.videoEl;
+  }
+
+  currentTime(): number {
+    return this.videoEl?.currentTime || 0;
+  }
+
+  pauseForNote(): void {
+    this.videoEl?.pause();
+    this.audioEl?.pause();
+  }
+
+  seekTo(time: number): void {
+    if (!this.videoEl) return;
+    try {
+      this.videoEl.currentTime = Math.max(0, time);
+      if (this.audioEl) this.audioEl.currentTime = this.videoEl.currentTime;
+      this.updateProgress();
+    } catch {
+      // Ignore seek failures.
+    }
+  }
+
+  togglePlayback(): void {
+    this.togglePlay();
+  }
+
+  refreshNoteMarkers(nodes: NoteNode[]): void {
+    this.noteNodes = nodes;
+    this.renderNoteMarkers();
+  }
+
+  private renderNoteMarkers(): void {
+    const container = this.noteMarkersEl;
+    const duration = this.duration;
+    if (!container) return;
+    container.empty();
+    if (duration <= 0) return;
+    for (const node of this.noteNodes) {
+      const time = Math.max(0, Math.min(duration, node.time));
+      const marker = container.createEl("button", {
+        cls: "vl-player-note-marker",
+        attr: {
+          type: "button",
+          title: node.comment || t("notes.jump", { time: formatClock(time) }),
+          "aria-label": t("notes.jump", { time: formatClock(time) })
+        }
+      });
+      marker.setCssStyles({ left: `${((time / duration) * 100).toFixed(3)}%` });
+      marker.addEventListener("pointerdown", (event) => event.stopPropagation());
+      marker.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.seekTo(time);
+      });
+    }
+  }
+
   onClose(): void {
+    if (this.keyHandler) {
+      document.removeEventListener("keydown", this.keyHandler, true);
+      this.keyHandler = null;
+    }
+    this.notesPanel?.destroy();
+    this.notesPanel = null;
     window.clearTimeout(this.hoverTimer);
     this.hoverTimer = 0;
     if (this.scrubVideo) {
@@ -1019,6 +1344,13 @@ export class VideoPlayerModal extends Modal {
       this.videoEl.pause();
       this.videoEl.removeAttribute("src");
       this.videoEl.load();
+    }
+    if (this.audioEl) {
+      this.audioEl.pause();
+      this.audioEl.removeAttribute("src");
+      this.audioEl.load();
+      this.audioEl.remove();
+      this.audioEl = null;
     }
     if (this.iframeEl) {
       this.iframeEl.removeAttribute("src");

@@ -1,7 +1,11 @@
 import { App, Notice, PluginSettingTab, setIcon, Setting, type SettingDefinitionItem } from "obsidian";
 import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
-import type { CardSize, LanguageSetting, Marker } from "../types";
+import type { CardSize, CloudProvider, LanguageSetting, Marker, NoteAttachmentMode } from "../types";
+import { isNewerVersion } from "../updates";
+import { BilibiliLoginModal } from "./bilibili-login-modal";
+import { CloudAddModal } from "./cloud-add-modal";
+import { CloudLoginModal } from "./cloud-login-modal";
 import { ConfirmModal } from "./common";
 import { MarkerEditModal } from "./marker-modal";
 
@@ -106,6 +110,106 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
       },
       {
         type: "group",
+        heading: t("settings.bilibiliHeading"),
+        items: [
+          {
+            name: t("settings.bilibiliAccount"),
+            desc: t("settings.bilibiliAccountDesc"),
+            render: (setting: Setting) => this.renderBilibili(setting)
+          }
+        ]
+      },
+      {
+        type: "group",
+        heading: t("settings.cloudHeading"),
+        items: [
+          ...(["baidu", "quark", "aliyun", "onedrive"] as CloudProvider[]).map((provider) => ({
+            name: t(`cloud.${provider}` as never),
+            desc: t("settings.cloudAccountDesc"),
+            render: (setting: Setting) => this.renderCloudAccount(setting, provider)
+          })),
+          {
+            name: t("cloud.addVideo"),
+            desc: t("cloud.addVideoDesc"),
+            render: (setting: Setting) => {
+              this.renderAction(setting, "plus", t("cloud.addVideo"), () => {
+                new CloudAddModal(this.app, this.plugin).open();
+              });
+            }
+          }
+        ]
+      },
+      {
+        type: "group",
+        heading: t("settings.notesHeading"),
+        items: [
+          {
+            name: t("settings.notesRoot"),
+            desc: t("settings.notesRootDesc"),
+            control: {
+              type: "text",
+              key: "notesRoot",
+              defaultValue: "视频笔记",
+              placeholder: "视频笔记"
+            }
+          },
+          {
+            name: t("settings.noteAttachmentMode"),
+            desc: t("settings.noteAttachmentModeDesc"),
+            control: {
+              type: "dropdown",
+              key: "noteAttachmentMode",
+              defaultValue: "subfolder",
+              options: {
+                same: t("settings.attachmentSame"),
+                subfolder: t("settings.attachmentSubfolder"),
+                custom: t("settings.attachmentCustom")
+              }
+            }
+          },
+          {
+            name: t("settings.noteAttachmentFolder"),
+            desc: t("settings.noteAttachmentFolderDesc"),
+            control: {
+              type: "text",
+              key: "noteAttachmentFolder",
+              defaultValue: "attachments",
+              placeholder: "attachments"
+            }
+          },
+          {
+            name: t("settings.noteMarkerShortcut"),
+            desc: t("settings.noteMarkerShortcutDesc"),
+            control: {
+              type: "text",
+              key: "noteMarkerShortcut",
+              defaultValue: "Alt+M",
+              placeholder: "Alt+M"
+            }
+          },
+          {
+            name: t("settings.noteSummaryShortcut"),
+            desc: t("settings.noteSummaryShortcutDesc"),
+            control: {
+              type: "text",
+              key: "noteSummaryShortcut",
+              defaultValue: "Alt+G",
+              placeholder: "Alt+G"
+            }
+          },
+          {
+            name: t("notes.openManager"),
+            desc: t("settings.notesManagerDesc"),
+            render: (setting: Setting) => {
+              this.renderAction(setting, "notebook-pen", t("notes.openManager"), () => {
+                void this.plugin.openNotesView();
+              }, true);
+            }
+          }
+        ]
+      },
+      {
+        type: "group",
         heading: t("scrape.sitesHeading"),
         items: [
           {
@@ -202,8 +306,149 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
             }
           }
         ]
+      },
+      {
+        type: "group",
+        heading: t("update.heading"),
+        items: [
+          {
+            name: t("update.auto"),
+            desc: t("update.autoDesc"),
+            control: {
+              type: "toggle",
+              key: "autoCheckUpdates",
+              defaultValue: true
+            }
+          },
+          {
+            name: t("update.row"),
+            desc: t("update.rowDesc", { version: this.plugin.manifest.version }),
+            render: (setting: Setting) => this.renderUpdate(setting)
+          }
+        ]
       }
     ];
+  }
+
+  private renderUpdate(setting: Setting): void {
+    setting.settingEl.addClass("vl-settings-account-row");
+    setting.controlEl.empty();
+    const wrap = setting.controlEl.createDiv({ cls: "vl-settings-account" });
+    const info = wrap.createDiv({ cls: "vl-settings-account-info" });
+    const release = this.plugin.latestRelease;
+    const newer = Boolean(release && isNewerVersion(release.tag_name, this.plugin.manifest.version));
+    info.createSpan({
+      cls: `vl-settings-account-status${newer ? " is-on" : ""}`,
+      text: this.plugin.updateChecking
+        ? t("update.checking")
+        : release
+          ? newer
+            ? t("update.availableShort", { version: release.tag_name })
+            : t("update.latest", { version: this.plugin.manifest.version })
+          : t("update.notChecked")
+    });
+    const actions = wrap.createDiv({ cls: "vl-settings-account-actions" });
+    const check = actions.createEl("button", {
+      cls: "vl-settings-action",
+      text: t("update.check"),
+      attr: { type: "button" }
+    });
+    check.disabled = this.plugin.updateChecking;
+    check.addEventListener("click", () => {
+      void this.plugin.checkForUpdates(true).then(() => this.update());
+    });
+    if (newer) {
+      const install = actions.createEl("button", {
+        cls: "vl-settings-action is-primary",
+        text: t("update.install"),
+        attr: { type: "button" }
+      });
+      install.disabled = this.plugin.updateInstalling;
+      install.addEventListener("click", () => {
+        void this.plugin.installUpdate();
+      });
+    }
+  }
+
+  private renderBilibili(setting: Setting): void {
+    setting.settingEl.addClass("vl-settings-account-row");
+    setting.controlEl.empty();
+    const wrap = setting.controlEl.createDiv({ cls: "vl-settings-account" });
+    const dot = wrap.createSpan({ cls: "vl-category-dot" });
+    dot.setCssStyles({ backgroundColor: "#fb7299" });
+    const info = wrap.createDiv({ cls: "vl-settings-account-info" });
+    const cookie = this.plugin.data.settings.bilibiliCookie;
+    info.createSpan({
+      cls: `vl-settings-account-status${cookie ? " is-on" : ""}`,
+      text: cookie
+        ? t("settings.bilibiliLogged", {
+            user: this.plugin.data.settings.bilibiliUser || "Bilibili"
+          })
+        : t("settings.bilibiliNotLogged")
+    });
+    const actions = wrap.createDiv({ cls: "vl-settings-account-actions" });
+    if (cookie) {
+      const logout = actions.createEl("button", {
+        cls: "vl-settings-action",
+        text: t("settings.bilibiliLogout"),
+        attr: { type: "button" }
+      });
+      logout.addEventListener("click", () => {
+        void this.plugin.logoutBilibili().then(() => this.update());
+      });
+    } else {
+      const login = actions.createEl("button", {
+        cls: "vl-settings-action is-primary",
+        text: t("settings.bilibiliLogin"),
+        attr: { type: "button" }
+      });
+      login.addEventListener("click", () => {
+        new BilibiliLoginModal(this.app, this.plugin, () => this.update()).open();
+      });
+    }
+  }
+
+  private renderCloudAccount(setting: Setting, provider: CloudProvider): void {
+    setting.settingEl.addClass("vl-settings-account-row");
+    setting.controlEl.empty();
+    const wrap = setting.controlEl.createDiv({ cls: "vl-settings-account" });
+    const colors: Record<CloudProvider, string> = {
+      baidu: "#4f9dd9",
+      quark: "#e8a33d",
+      aliyun: "#e46b6b",
+      onedrive: "#4f9dd9"
+    };
+    const dot = wrap.createSpan({ cls: "vl-category-dot" });
+    dot.setCssStyles({ backgroundColor: colors[provider] });
+    const info = wrap.createDiv({ cls: "vl-settings-account-info" });
+    const account = this.plugin.cloudAccount(provider);
+    const connected = Boolean(account?.enabled && account.credential);
+    info.createSpan({
+      cls: `vl-settings-account-status${connected ? " is-on" : ""}`,
+      text: connected
+        ? t("settings.cloudLogged", { user: account?.displayName || t(`cloud.${provider}` as never) })
+        : t("settings.cloudNotLogged")
+    });
+    const actions = wrap.createDiv({ cls: "vl-settings-account-actions" });
+    if (connected) {
+      const logout = actions.createEl("button", {
+        cls: "vl-settings-action",
+        text: t("settings.cloudLogout"),
+        attr: { type: "button" }
+      });
+      logout.addEventListener("click", () => {
+        void this.plugin.disconnectCloudAccount(provider).then(() => this.update());
+      });
+    } else {
+      const login = actions.createEl("button", {
+        cls: "vl-settings-action",
+        text: t("settings.cloudLogin"),
+        attr: { type: "button" }
+      });
+      login.addEventListener("click", () => {
+        new CloudLoginModal(this.app, this.plugin, provider, () => this.update()).open();
+      });
+    }
   }
 
   private renderScrapeSites(setting: Setting): void {
@@ -499,6 +744,12 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     if (key === "metatubeServerPath") return this.plugin.data.settings.metatubeServerPath;
     if (key === "scrapeAuto") return this.plugin.data.settings.scrapeAuto;
     if (key === "relatedEnabled") return this.plugin.data.settings.relatedEnabled;
+    if (key === "notesRoot") return this.plugin.data.settings.notesRoot;
+    if (key === "noteAttachmentMode") return this.plugin.data.settings.noteAttachmentMode;
+    if (key === "noteAttachmentFolder") return this.plugin.data.settings.noteAttachmentFolder;
+    if (key === "noteMarkerShortcut") return this.plugin.data.settings.noteMarkerShortcut;
+    if (key === "noteSummaryShortcut") return this.plugin.data.settings.noteSummaryShortcut;
+    if (key === "autoCheckUpdates") return this.plugin.data.settings.autoCheckUpdates;
     return undefined;
   }
 
@@ -527,6 +778,29 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
       this.plugin.data.settings.relatedEnabled = Boolean(value);
       await this.plugin.persist();
       this.plugin.refreshViews();
+    } else if (key === "notesRoot") {
+      this.plugin.data.settings.notesRoot = String(value || "").trim() || "视频笔记";
+      await this.plugin.persist();
+    } else if (key === "noteAttachmentMode") {
+      const mode = String(value || "subfolder") as NoteAttachmentMode;
+      this.plugin.data.settings.noteAttachmentMode =
+        mode === "same" || mode === "custom" ? mode : "subfolder";
+      await this.plugin.persist();
+    } else if (key === "noteAttachmentFolder") {
+      this.plugin.data.settings.noteAttachmentFolder =
+        String(value || "").trim() || "attachments";
+      await this.plugin.persist();
+    } else if (key === "noteMarkerShortcut") {
+      this.plugin.data.settings.noteMarkerShortcut =
+        String(value || "").trim() || "Alt+M";
+      await this.plugin.persist();
+    } else if (key === "noteSummaryShortcut") {
+      this.plugin.data.settings.noteSummaryShortcut =
+        String(value || "").trim() || "Alt+G";
+      await this.plugin.persist();
+    } else if (key === "autoCheckUpdates") {
+      this.plugin.data.settings.autoCheckUpdates = Boolean(value);
+      await this.plugin.persist();
     }
   }
 }

@@ -1171,8 +1171,17 @@ export class VideoEditModal extends Modal {
       const item: VideoItem = {
         id: this.item?.id || uid("vid"),
         url: isLocal ? "" : url,
-        provider: isLocal ? "local" : parsed?.provider || "web",
+        provider: isLocal
+          ? "local"
+          : this.item?.provider === "cloud"
+            ? "cloud"
+            : parsed?.provider || "web",
         videoId: isLocal ? undefined : parsed?.videoId,
+        cloudProvider: this.item?.provider === "cloud" ? this.item.cloudProvider : undefined,
+        streamUrl: this.item?.provider === "cloud" ? this.item.streamUrl || url : undefined,
+        notePath: this.item?.notePath,
+        noteFolder: this.item?.noteFolder,
+        noteCoverPath: this.item?.noteCoverPath,
         title,
         author: this.authorInput.value.trim() || undefined,
         studio: this.studioInput.value.trim() || undefined,

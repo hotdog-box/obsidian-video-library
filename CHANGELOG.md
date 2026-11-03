@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.0 — 2026-11-04
+
+- Add a resizable video player modal, with a notes panel that opens on the right.
+- Add video notes stored as Markdown files in the vault. Each video gets its own folder; the note title defaults to the video name and can be renamed.
+- Add timestamp nodes: mark the current time (button or configurable shortcut), pause, capture a high-resolution PNG frame, write the timestamp/comment/caption into the note, and show a clickable marker on the timeline.
+- Clicking a timestamp in a note or in the notes manager opens the video at that exact time.
+- Add a summary divider shortcut (default `Alt+G`) that inserts `---` and resumes playback.
+- Add node tags, inline note editing, paste-text/paste-image support, and manual screenshot removal.
+- Add a notes manager view with one card per video folder, editable folder covers, per-timestamp cards, and a recycle bin with restore/permanent delete.
+- Add note settings for the notes root, screenshot location (same folder, subfolder, or a specified vault folder), and both shortcuts.
+- Add Bilibili QR-code login. The login cookie is stored only in the local plugin data, never uploaded by the plugin.
+- Add native Bilibili playback through the local stream proxy, so HD streams can play inside Obsidian without opening a browser tab. The iframe player remains as a fallback.
+- Add local cloud-drive accounts for Baidu Pan, Quark Drive, Aliyun Drive and OneDrive. Credentials stay in local `data.json`; video URLs are streamed through the local proxy instead of being downloaded.
+- Add “Add cloud video” and automatic source categories (Bilibili, YouTube, Baidu Pan, Quark Drive, Aliyun Drive, OneDrive).
+- Add update checking with an automatic startup reminder and a one-click updater that downloads the latest release assets from GitHub.
+- Migrate plugin data to `DATA_VERSION = 6` with note groups, recycle-bin records, cloud accounts and note settings.
+- Add `qrcode` for local QR rendering; the plugin still makes no requests to third-party QR services.
+
 ## 0.8.1 — 2026-11-02
 
 - Address Obsidian community review findings for 0.8.0.

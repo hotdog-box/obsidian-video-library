@@ -1,4 +1,6 @@
 import { rollup, watch as rollupWatch } from "rollup";
+import commonjs from "@rollup/plugin-commonjs";
+import nodeResolve from "@rollup/plugin-node-resolve";
 import typescript from "@rollup/plugin-typescript";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
@@ -90,6 +92,8 @@ const config = {
   external,
   plugins: [
     stylesPlugin(),
+    nodeResolve({ browser: true, preferBuiltins: false }),
+    commonjs(),
     typescript({
       tsconfig: path.join(root, "tsconfig.json"),
       compilerOptions: {

@@ -8,6 +8,7 @@ import type VideoLibraryPlugin from "../main";
 import type { Category, Folder, SortMode, VideoItem } from "../types";
 import { UNCATEGORIZED_ID } from "../types";
 import { CategoryEditModal, CategoryManagerModal } from "./category-modal";
+import { CloudAddModal } from "./cloud-add-modal";
 import { VideoEditModal } from "./video-modal";
 import { VideoPlayerModal } from "./player-modal";
 import { PreviewConfigModal } from "./preview-config-modal";
@@ -589,6 +590,16 @@ export class VideoLibraryView extends ItemView {
     setIcon(add.createSpan({ cls: "vl-btn-icon" }), "plus");
     add.createSpan({ text: t("action.add") });
     add.addEventListener("click", () => this.openAdd());
+
+    const cloud = actions.createEl("button", {
+      cls: "vl-toolbar-cloud",
+      attr: { type: "button", title: t("cloud.addVideo"), "aria-label": t("cloud.addVideo") }
+    });
+    setIcon(cloud, "cloud");
+    cloud.addEventListener("click", () => {
+      this.plugin.focusMainWindow();
+      new CloudAddModal(this.app, this.plugin).open();
+    });
 
     this.buildSelectionBar(header);
     this.buildBreadcrumb(header);
@@ -2575,6 +2586,7 @@ export class VideoLibraryView extends ItemView {
   private openPlayer(video: VideoItem): void {
     HoverPreview.stopActive();
     void this.plugin.markPlayed(video.id);
+    this.plugin.focusMainWindow();
     new VideoPlayerModal(this.app, this.plugin, video).open();
   }
 

@@ -6,7 +6,7 @@ description: "Use when modifying the Obsidian Video Library plugin (plugin id vi
 # Obsidian Video Library — AI 技术交接报告
 
 > 交接对象：任何要修改本项目的 AI 编码代理。
-> 项目版本：`0.8.0`（截至本报告）。
+> 项目版本：`0.9.0`（截至本报告）。
 > 源码入口：`src/main.ts`。
 > 配套人读文档：`项目架构与修改指南.md`。
 
@@ -26,6 +26,10 @@ description: "Use when modifying the Obsidian Video Library plugin (plugin id vi
 - 可选 MetaTube 刮削
 - 设置页、站点 JSON 导入/导出
 - 撤销（最多 30 步）
+- 视频笔记：Markdown、时间节点、高清截图、笔记管理、回收站
+- B 站扫码登录与本地代理原生播放
+- 网盘账号、直链视频本地代理播放
+- 自动检查更新与一键更新
 
 技术栈：
 
@@ -408,6 +412,72 @@ npm run dev        # watch
 
 ---
 
+## 10.5 0.9.0 笔记 / B 站 / 网盘 / 更新
+
+### 新文件
+
+- `src/notes.ts`：`NoteStore`。笔记 Markdown、节点解析、截图、回收站。
+- `src/ui/notes-panel.ts`：播放器右侧笔记面板。
+- `src/ui/notes-view.ts`：笔记管理视图。
+- `src/ui/notes-trash-modal.ts`：回收站。
+- `src/stream-server.ts`：127.0.0.1 随机端口流代理，转发 Range 和鉴权头。
+- `src/bilibili.ts`：B 站扫码登录、DASH 解析。
+- `src/ui/bilibili-login-modal.ts`：二维码登录。
+- `src/cloud.ts`：网盘鉴权头与连接测试。
+- `src/cloud-login-window.ts`：Electron 登录窗口读取百度/夸克 Cookie。
+- `src/ui/cloud-login-modal.ts`、`src/ui/cloud-add-modal.ts`。
+- `src/updates.ts`：GitHub Release 检查。
+
+### 笔记数据
+
+- `PluginData.noteGroups: NoteGroup[]`
+- `PluginData.trashNotes: TrashNote[]`
+- `VideoItem.notePath / noteFolder / noteCoverPath`
+- 节点从 Markdown 的 `<!-- vl-note: JSON -->` 解析，不存 `data.json`。
+
+格式：
+
+```md
+## 0:24 · 备注
+<!-- vl-note: {"id":"note_xxx","time":24.59,"tags":[],"image":"...png","createdAt":...} -->
+[▶ 0:24](obsidian://video-library?action=play&video=vid_xxx&t=24.59)
+![[...png]]
+总结
+---
+```
+
+**不要改 marker 格式**，否则旧笔记节点全部解析失败。
+
+### 笔记关键流程
+
+- 标记：暂停 → `captureVideoElement(maxWidth:0,type:image/png)` → `NoteStore.addNode()` → `player.refreshNoteMarkers()`。
+- 跳转：`obsidian://video-library?action=play&video=...&t=...` 或 `player.seekTo()`。
+- 删除：`deleteNode()` 从 Markdown 移除块并写入 `trashNotes`。
+- 还原：`restoreTrash()` 追加块。
+- 彻底删除：`purgeTrash()` 删除附件；没有节点时删除笔记和 group。
+- 移动笔记文件后：`resolveGroup()` 按 frontmatter `video-id` 重新定位。
+- 打开 Modal 前必须 `plugin.focusMainWindow()`，否则 Modal 会跑进设置 popout。
+
+### B 站
+
+- `bilibiliCookie` 只存本地。
+- 原生播放：`resolveBilibiliStream()` → `playurl` DASH → 视频/音频双轨 → 本地代理。
+- 失败回退 iframe；不要删除回退。
+
+### 网盘
+
+- `cloudAccounts` 存 `credential`，仅本地。
+- `getVideoSource()` 对 cloud 用 `streamServer.urlFor(url, cloudHeaders(...))`。
+- 当前“添加网盘视频”接受**直链地址**；文件列表浏览尚未适配，这是一个明确的待办，不要声称已支持。
+- 百度/夸克登录窗口依赖 `require("electron").remote`；如果 remote 不可用，回退到手动 Cookie。
+
+### 更新
+
+- `checkForUpdates()` 查 GitHub latest；`installUpdate()` 下载三个资产后 `location.reload()`。
+- 改版本号必须同步 `manifest.json`、`package.json`、`versions.json`。
+
+---
+
 ## 11. 已知陷阱
 
 1. **`library-view.ts` 很大**：不要全局替换同类名；先定位具体 `renderXxx()`。
@@ -436,7 +506,7 @@ npm run dev        # watch
 项目：Obsidian 插件 Video Library（plugin id: video-library）
 源码根：<repo>
 入口：src/main.ts
-数据：src/types.ts（DATA_VERSION=5）
+数据：src/types.ts（DATA_VERSION=6）
 界面：src/ui/*
 构建：npm run build（tsc + rollup）
 约束：

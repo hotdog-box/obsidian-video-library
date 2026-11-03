@@ -1,4 +1,8 @@
-export type Provider = "bilibili" | "youtube" | "vimeo" | "direct" | "web" | "local";
+export type Provider = "bilibili" | "youtube" | "vimeo" | "direct" | "web" | "local" | "cloud";
+
+export type CloudProvider = "baidu" | "quark" | "aliyun" | "onedrive";
+
+export type NoteAttachmentMode = "same" | "subfolder" | "custom";
 
 export type LanguageSetting = "auto" | "zh" | "en";
 
@@ -10,7 +14,7 @@ export type ViewMode = "grid" | "list";
 
 export type TagMatchMode = "any" | "all";
 
-export const DATA_VERSION = 5;
+export const DATA_VERSION = 6;
 
 export const UNCATEGORIZED_ID = "uncategorized";
 
@@ -52,6 +56,46 @@ export interface Marker {
   description?: string;
   sortOrder?: number;
   createdAt: number;
+}
+
+export interface CloudAccount {
+  provider: CloudProvider;
+  enabled: boolean;
+  credential: string;
+  displayName?: string;
+  updatedAt?: number;
+}
+
+export interface NoteNode {
+  id: string;
+  time: number;
+  comment: string;
+  summary: string;
+  tags: string[];
+  imagePath?: string;
+  createdAt: number;
+}
+
+export interface NoteGroup {
+  id: string;
+  videoId: string;
+  folderPath: string;
+  notePath: string;
+  title: string;
+  coverPath?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TrashNote {
+  id: string;
+  videoId: string;
+  videoTitle: string;
+  notePath: string;
+  folderPath: string;
+  block: string;
+  node: NoteNode;
+  deletedAt: number;
 }
 
 export const DEFAULT_MARKERS: Marker[] = [
@@ -155,6 +199,11 @@ export interface VideoItem {
   localPath?: string;
   localExternal?: boolean;
   localLinkPath?: string;
+  cloudProvider?: CloudProvider;
+  streamUrl?: string;
+  notePath?: string;
+  noteFolder?: string;
+  noteCoverPath?: string;
   duration?: number;
   epId?: number;
   preview?: PreviewConfig;
@@ -181,6 +230,15 @@ export interface PluginSettings {
   metatubeServerPath: string;
   scrapeAuto: boolean;
   relatedEnabled: boolean;
+  notesRoot: string;
+  noteAttachmentMode: NoteAttachmentMode;
+  noteAttachmentFolder: string;
+  noteMarkerShortcut: string;
+  noteSummaryShortcut: string;
+  bilibiliCookie: string;
+  bilibiliUser: string;
+  autoCheckUpdates: boolean;
+  cloudAccounts: Record<CloudProvider, CloudAccount>;
 }
 
 export interface PluginData {
@@ -190,6 +248,8 @@ export interface PluginData {
   folders: Folder[];
   tags: Tag[];
   markers: Marker[];
+  noteGroups: NoteGroup[];
+  trashNotes: TrashNote[];
   settings: PluginSettings;
 }
 
@@ -216,6 +276,15 @@ export interface VideoMetadata {
   epId?: number;
 }
 
+export function defaultCloudAccounts(): Record<CloudProvider, CloudAccount> {
+  return {
+    baidu: { provider: "baidu", enabled: false, credential: "" },
+    quark: { provider: "quark", enabled: false, credential: "" },
+    aliyun: { provider: "aliyun", enabled: false, credential: "" },
+    onedrive: { provider: "onedrive", enabled: false, credential: "" }
+  };
+}
+
 export const DEFAULT_SETTINGS: PluginSettings = {
   language: "auto",
   sort: "newest",
@@ -229,7 +298,16 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   metatubeToken: "",
   metatubeServerPath: "",
   scrapeAuto: false,
-  relatedEnabled: true
+  relatedEnabled: true,
+  notesRoot: "视频笔记",
+  noteAttachmentMode: "subfolder",
+  noteAttachmentFolder: "attachments",
+  noteMarkerShortcut: "Alt+M",
+  noteSummaryShortcut: "Alt+G",
+  bilibiliCookie: "",
+  bilibiliUser: "",
+  autoCheckUpdates: true,
+  cloudAccounts: defaultCloudAccounts()
 };
 
 export function createDefaultData(): PluginData {
@@ -243,7 +321,12 @@ export function createDefaultData(): PluginData {
       ...marker,
       createdAt: Date.now()
     })),
-    settings: { ...DEFAULT_SETTINGS }
+    noteGroups: [],
+    trashNotes: [],
+    settings: {
+      ...DEFAULT_SETTINGS,
+      cloudAccounts: defaultCloudAccounts()
+    }
   };
 }
 

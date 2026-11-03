@@ -217,20 +217,25 @@ export class CoverStore {
     }
   }
 
-  async captureVideoElement(video: HTMLVideoElement): Promise<ArrayBuffer | null> {
+  async captureVideoElement(
+    video: HTMLVideoElement,
+    options: { maxWidth?: number; quality?: number; type?: string } = {}
+  ): Promise<ArrayBuffer | null> {
     try {
       const width = video.videoWidth;
       const height = video.videoHeight;
       if (!width || !height || video.readyState < 2) return null;
-      const maxWidth = 1280;
-      const scale = Math.min(1, maxWidth / width);
+      const maxWidth = options.maxWidth === 0 ? width : options.maxWidth || 1280;
+      const scale = maxWidth > 0 ? Math.min(1, maxWidth / width) : 1;
       const canvas = document.body.createEl("canvas");
       canvas.width = Math.round(width * scale);
       canvas.height = Math.round(height * scale);
       const context = canvas.getContext("2d");
       if (!context) return null;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+      const type = options.type || "image/jpeg";
+      const quality = options.quality ?? (type === "image/png" ? 1 : 0.9);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
       canvas.remove();
       return blob ? await blob.arrayBuffer() : null;
     } catch {

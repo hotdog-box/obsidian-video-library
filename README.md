@@ -19,15 +19,19 @@ Video Library is a desktop-only Obsidian plugin for collecting, organizing and w
 - Windows Explorer-style selection: single-click selects, double-click opens, Ctrl/Cmd toggles, Shift extends, and dragging selected items moves them.
 - A Bilibili-style Home view with a six-item recent/played carousel, pinned picks, recent additions, favorites, local videos and category rows.
 - Optional deletion of the local source file, only after an explicit confirmation checkbox.
-- The plugin has no accounts, ads or telemetry. Network access is limited to metadata and cover requests for the links the user adds. External file access is limited to files the user explicitly chooses.
+- Sign in to Bilibili with a QR code and play native HD streams through a local proxy, without opening a browser tab.
+- Connect Baidu Pan, Quark Drive, Aliyun Drive and OneDrive; credentials stay in local plugin data and video URLs stream through the local proxy.
+- Video notes: a resizable player, a right-hand Markdown notes panel, timestamp markers with high-resolution screenshots, node tags, a notes manager and a recycle bin.
+- Automatic update checks with a one-click updater.
+- The plugin has no central accounts, ads or telemetry. Optional Bilibili/cloud credentials are stored only in the local plugin data; network access is limited to the providers the user explicitly connects, plus metadata/cover/update requests. External file access is limited to files the user explicitly chooses.
 - Desktop only: Node.js and Electron APIs are required for external files and native file dialogs.
 
 See the Chinese sections below for the complete feature list and usage notes.
 
 ---
 
-> 当前版本：`0.8.0`
-> 已在 Obsidian `1.14.5`（Windows 桌面版）实际测试通过。
+> 当前版本：`0.9.0`
+> 已在 Obsidian `1.15.0`（Windows 桌面版）实际测试通过。
 > 插件类型：仅桌面端。
 
 ---
@@ -56,6 +60,27 @@ See the Chinese sections below for the complete feature list and usage notes.
   - 选择仓库内的视频文件
   - 内嵌播放
   - 保存后自动从视频中截取封面
+- **B 站登录与原生高清播放**
+  - 设置页使用哔哩哔哩手机 App 扫码登录，Cookie 只保存在本地 `data.json`
+  - 登录后通过本地流代理直接播放 B 站 DASH 视频，支持更高清晰度，不再跳转网页
+  - 无法获取视频流时自动回退到原来的网页播放器
+- **网盘视频**
+  - 设置页可连接百度网盘、夸克网盘、阿里云盘、OneDrive
+  - 百度/夸克支持打开网盘登录窗口并在本地读取 Cookie；阿里云盘/OneDrive 支持访问令牌
+  - 添加网盘视频地址后通过本地代理播放，不把视频文件下载到本地
+  - 当前版本需要填写网盘视频的**直链播放/下载地址**；网盘文件列表浏览会在后续版本逐个适配
+  - 按来源自动归类到 B站、YouTube、百度网盘、夸克网盘、阿里云盘、OneDrive 等分类
+- **视频笔记**
+  - 播放器右侧可展开笔记面板；弹窗可拖动右下角随意调整大小
+  - 每个视频在笔记根目录下自动建立一个文件夹和一份 Markdown 笔记，标题默认使用视频名称，可手动修改
+  - 标记当前时间会自动暂停、截取高清 PNG 画面，并把时间点、备注和截图写入笔记，同时在进度条上生成定位点
+  - 点击笔记或笔记管理里的时间点，会打开视频并跳转到对应时刻
+  - 支持节点标签、总结分割线（默认 `Alt+G` 并继续播放）、粘贴文字/图片、手动删除截图
+  - 笔记管理视图按视频文件夹展示封面和时间节点卡片，支持修改封面、回收站、还原和彻底删除
+  - 截图可保存在笔记同目录、笔记子目录或指定仓库文件夹
+- **更新**
+  - 启动后自动检查 GitHub 最新 Release，也可在设置里手动检查
+  - 发现新版本时可一键下载并重载
 - **浏览与整理**
   - 封面网格与列表两种显示模式，可一键切换；封面网格支持卡片大小切换
   - 本地/直链视频悬停时静音预览；可设置预览总时长，并选择多个片段按顺序拼接，超出总时长即从头循环
@@ -280,6 +305,26 @@ B站/YouTube 链接目前只自动获取标题、作者、封面、时长并自�
 
 ---
 
+## 视频笔记怎么用
+
+1. 打开任意视频，点播放器底部的 **记笔记**。
+2. 播放到需要记录的位置，点右侧面板的 **标记当前时间**，或按 `Alt+M`。
+3. 插件会暂停视频、截取当前画面，并在笔记文件夹里生成/追加一个时间节点。
+4. 在右侧填写备注、总结和节点标签；点时间按钮可回到该时刻。
+5. 写完总结按 `Alt+G`，会插入一条分割线并继续播放。
+6. 点 **打开笔记** 可以在 Obsidian 中直接编辑 Markdown；图片、文字都可以继续粘贴进去。
+7. 左侧 ribbon 的 **视频笔记** 图标或命令面板的“打开笔记管理”，可以查看所有视频笔记、修改视频文件夹封面、进入回收站。
+
+笔记默认保存到仓库根目录的 `视频笔记/`。设置里可以修改：
+
+- 笔记根文件夹
+- 截图位置：笔记同目录 / 笔记子文件夹 / 指定仓库文件夹
+- 标记快捷键、总结分割线快捷键
+
+标记按钮会自动截取原生分辨率的 PNG；B 站视频通过本地代理播放时也可以截取。
+
+---
+
 ## 安装 / 开发
 
 ### 环境
@@ -425,7 +470,7 @@ GitHub Release 建议附上这三个文件，方便直接安装：
 
 ### 中文
 
-这个插件**没有账号系统、没有广告、没有遥测**。所有视频、分类、标签、文件夹和设置都只保存在本地插件目录的 `data.json` 中。
+这个插件**没有中心账号系统、没有广告、没有遥测**。所有视频、分类、标签、文件夹、笔记和设置都只保存在本地仓库/插件目录中；可选的 B 站、网盘凭据也只保存在本地 `data.json`，插件不会把它们上传到任何自有服务器。
 
 只有在用户添加视频、刷新信息或更换封面时，插件才会访问网络：
 

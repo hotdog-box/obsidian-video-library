@@ -80,6 +80,7 @@ export class VideoPlayerModal extends Modal {
   private openNotesRequested = false;
 
   onOpen(): void {
+    this.plugin.activePlayer = this;
     this.titleEl.setText(this.item.title || t("misc.untitled"));
     this.render();
     this.addResizeHandle();
@@ -131,23 +132,25 @@ export class VideoPlayerModal extends Modal {
     if (markMatch) {
       event.preventDefault();
       event.stopPropagation();
-      if (!this.notesPanel) {
-        this.toggleNotes(true);
-        window.setTimeout(() => void this.notesPanel?.markCurrent(), 160);
-      } else {
-        void this.notesPanel.markCurrent();
-      }
+      const fullscreen = this.isStageFullscreen();
+      if (fullscreen) this.openFloatingNotes();
+      if (!this.notesPanel) this.toggleNotes(true);
+      window.setTimeout(
+        () => void this.notesPanel?.markCurrent(),
+        fullscreen ? 420 : this.notesPanel ? 0 : 160
+      );
       return;
     }
     if (summaryMatch) {
       event.preventDefault();
       event.stopPropagation();
-      if (!this.notesPanel) {
-        this.toggleNotes(true);
-        window.setTimeout(() => void this.notesPanel?.insertSummary(), 160);
-      } else {
-        void this.notesPanel.insertSummary();
-      }
+      const fullscreen = this.isStageFullscreen();
+      if (!this.notesPanel) this.toggleNotes(true);
+      window.setTimeout(() => {
+        void this.notesPanel?.insertSummary().then(() => {
+          if (fullscreen) this.plugin.closeNotesFloating();
+        });
+      }, this.notesPanel ? 0 : 160);
     }
   }
 
@@ -205,6 +208,7 @@ export class VideoPlayerModal extends Modal {
     const player = main.createDiv({ cls: "vl-player-stage" });
     this.stageEl = player;
     this.renderPlayer(player);
+    this.buildFullscreenRail(player);
 
     if (this.item.provider === "bilibili" && this.item.epId) {
       main.createEl("p", { text: t("player.bilibiliRestricted"), cls: "vl-player-notice" });
@@ -1256,6 +1260,26 @@ export class VideoPlayerModal extends Modal {
     }
   }
 
+  private buildFullscreenRail(stage: HTMLElement): void {
+    const rail = stage.createDiv({ cls: "vl-fullscreen-notes-rail" });
+    const button = rail.createEl("button", {
+      cls: "vl-fullscreen-notes-button",
+      attr: { type: "button", title: t("notes.toggle"), "aria-label": t("notes.toggle") }
+    });
+    setIcon(button, "notebook-pen");
+    button.createSpan({ text: t("notes.toggle") });
+    button.addEventListener("click", () => this.openFloatingNotes());
+  }
+
+  private isStageFullscreen(): boolean {
+    return Boolean(this.stageEl && document.fullscreenElement === this.stageEl);
+  }
+
+  private openFloatingNotes(): void {
+    if (!this.notesPanel) this.toggleNotes(true);
+    void this.plugin.openNotesFloating(this.item);
+  }
+
   private toggleNotes(force?: boolean): void {
     const open = force ?? !this.notesPanel;
     if (!open) {
@@ -1332,6 +1356,7 @@ export class VideoPlayerModal extends Modal {
   }
 
   onClose(): void {
+    if (this.plugin.activePlayer === this) this.plugin.activePlayer = null;
     if (this.keyHandler) {
       document.removeEventListener("keydown", this.keyHandler, true);
       this.keyHandler = null;

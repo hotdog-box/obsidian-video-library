@@ -530,3 +530,14 @@ npm run dev        # watch
 - 构建：`build.mjs`
 - 清单：`manifest.json`
 - 本地站点模板：`刮削站点导入代码/刮削站点模板.json`（不提交）
+
+### 10.6 0.9.0 补充约束
+
+- 全屏笔记栏在 `.vl-player-stage:fullscreen` 下显示；不要把它移到 modal 外层。
+- 悬浮笔记是 Obsidian popout `NotesFloatingView`；打开 Modal 前务必 `focusMainWindow()`，否则会进到悬浮窗。
+- `setAlwaysOnTop(true, "screen-saver")` 用于覆盖全屏视频。
+- 截图分辨率默认 1920；源视频小于该宽度时不要 upscale。
+- 单独删除截图走 `trashImage()`，不要直接 `adapter.remove()`。
+- 回收站包含 `trashNotes` 和 `trashImages`；清空调用 `clearTrash()`。
+- `notesGrouping` 为 `flat` 时笔记直接放根目录；`notesViewMode` 为 `list` 时只改 CSS 类。
+- 网盘直链是临时 URL；不要把它当成永久地址。文件列表浏览仍未实现。

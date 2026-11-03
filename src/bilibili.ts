@@ -50,7 +50,10 @@ function cookieHeader(cookie: string): Record<string, string> {
   return cookie.trim() ? { Cookie: cookie.trim() } : {};
 }
 
-async function biliGet<T>(url: string, cookie = ""): Promise<BiliResponse<T>> {
+async function biliGetWithHeaders<T>(
+  url: string,
+  cookie = ""
+): Promise<{ json: BiliResponse<T>; headers: Record<string, string> }> {
   const response = await requestUrl({
     url,
     method: "GET",
@@ -61,23 +64,47 @@ async function biliGet<T>(url: string, cookie = ""): Promise<BiliResponse<T>> {
       ...cookieHeader(cookie)
     }
   });
-  return response.json as BiliResponse<T>;
+  return {
+    json: response.json as BiliResponse<T>,
+    headers: (response.headers || {}) as Record<string, string>
+  };
 }
 
-function parseLoginCookie(url: string): string | undefined {
-  try {
-    const params = new URL(url).searchParams;
-    const sessdata = params.get("SESSDATA");
-    const biliJct = params.get("bili_jct");
-    const dedeUserId = params.get("DedeUserID");
-    if (!sessdata) return undefined;
-    const parts = [`SESSDATA=${sessdata}`];
-    if (biliJct) parts.push(`bili_jct=${biliJct}`);
-    if (dedeUserId) parts.push(`DedeUserID=${dedeUserId}`);
-    return parts.join("; ");
-  } catch {
-    return undefined;
+async function biliGet<T>(url: string, cookie = ""): Promise<BiliResponse<T>> {
+  return (await biliGetWithHeaders<T>(url, cookie)).json;
+}
+
+function parseSetCookieHeader(headers: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {};
+  const raw = headers["set-cookie"] || headers["Set-Cookie"];
+  if (!raw) return result;
+  const text = Array.isArray(raw) ? raw.join("\n") : String(raw);
+  for (const name of ["SESSDATA", "bili_jct", "DedeUserID"]) {
+    const match = text.match(new RegExp(`(?:^|[,\\n])\\s*${name}=([^;\\n]+)`));
+    if (match?.[1]) result[name] = decodeURIComponent(match[1]);
   }
+  return result;
+}
+
+function mergeLoginCookie(url: string | undefined, headers: Record<string, string>): string | undefined {
+  const values: Record<string, string> = {};
+  if (url) {
+    try {
+      const params = new URL(url).searchParams;
+      for (const name of ["SESSDATA", "bili_jct", "DedeUserID"]) {
+        const value = params.get(name);
+        if (value) values[name] = value;
+      }
+    } catch {
+      // Ignore malformed redirect URLs.
+    }
+  }
+  Object.assign(values, parseSetCookieHeader(headers));
+  if (!values.SESSDATA) return undefined;
+  const parts = [`SESSDATA=${values.SESSDATA}`];
+  if (values.bili_jct) parts.push(`bili_jct=${values.bili_jct}`);
+  if (values.DedeUserID) parts.push(`DedeUserID=${values.DedeUserID}`);
+  return parts.join("; ");
 }
 
 export async function startBilibiliLogin(): Promise<BilibiliLoginStart> {
@@ -91,17 +118,28 @@ export async function startBilibiliLogin(): Promise<BilibiliLoginStart> {
 }
 
 export async function pollBilibiliLogin(key: string): Promise<BilibiliLoginPoll> {
-  const response = await biliGet<{ url?: string; code?: number; message?: string }>(
+  const result = await biliGetWithHeaders<{
+    url?: string;
+    code?: number;
+    message?: string;
+    refresh_token?: string;
+  }>(
     `https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${encodeURIComponent(key)}`
   );
+  const response = result.json;
   if (response.code !== 0) return { status: "error", message: response.message };
   const code = Number(response.data?.code);
   if (code === 86101) return { status: "waiting" };
   if (code === 86090) return { status: "scanned" };
   if (code === 86038) return { status: "expired" };
   if (code !== 0) return { status: "error", message: response.data?.message || "Login failed" };
-  const cookie = response.data?.url ? parseLoginCookie(response.data.url) : undefined;
-  if (!cookie) return { status: "error", message: "Login succeeded but no cookie was returned" };
+  const cookie = mergeLoginCookie(response.data?.url, result.headers);
+  if (!cookie) {
+    return {
+      status: "error",
+      message: "Login succeeded but SESSDATA was not returned. Bilibili may require phone verification; try again."
+    };
+  }
   const user = await getBilibiliUser(cookie);
   return { status: "success", cookie, user: user?.name };
 }

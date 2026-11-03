@@ -24,6 +24,7 @@ import {
   Provider,
   sanitizePreviewConfig,
   SortMode,
+  TrashImage,
   TrashNote,
   Tag,
   TAG_COLORS,
@@ -46,6 +47,7 @@ import { VideoEditModal } from "./ui/video-modal";
 import { VideoLibrarySettingTab } from "./ui/settings-tab";
 import { VideoPlayerModal } from "./ui/player-modal";
 import { NotesView, NOTES_VIEW_TYPE } from "./ui/notes-view";
+import { NotesFloatingView, NOTES_FLOAT_VIEW_TYPE } from "./ui/notes-floating-view";
 import { CloudAddModal } from "./ui/cloud-add-modal";
 
 export type CategoryMutationResult =
@@ -153,6 +155,7 @@ export default class VideoLibraryPlugin extends Plugin {
   data: PluginData = createDefaultData();
   coverStore!: CoverStore;
   noteStore!: NoteStore;
+  activePlayer: VideoPlayerModal | null = null;
   streamServer = new StreamServer();
   latestRelease: UpdateRelease | null = null;
   updateChecking = false;
@@ -176,6 +179,10 @@ export default class VideoLibraryPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE, (leaf: WorkspaceLeaf) => new VideoLibraryView(leaf, this));
     this.registerView(NOTES_VIEW_TYPE, (leaf: WorkspaceLeaf) => new NotesView(leaf, this));
+    this.registerView(
+      NOTES_FLOAT_VIEW_TYPE,
+      (leaf: WorkspaceLeaf) => new NotesFloatingView(leaf, this)
+    );
 
     this.registerObsidianProtocolHandler("video-library", (params) => {
       if (params.action !== "play") return;
@@ -278,6 +285,37 @@ export default class VideoLibraryPlugin extends Plugin {
       await leaf.setViewState({ type: NOTES_VIEW_TYPE, active: true });
     }
     await this.app.workspace.revealLeaf(leaf);
+  }
+
+  async openNotesFloating(video: VideoItem): Promise<void> {
+    try {
+      const existing = this.app.workspace.getLeavesOfType(NOTES_FLOAT_VIEW_TYPE)[0];
+      if (existing) {
+        await existing.setViewState({
+          type: NOTES_FLOAT_VIEW_TYPE,
+          active: true,
+          state: { videoId: video.id }
+        });
+        await this.app.workspace.revealLeaf(existing);
+        return;
+      }
+      const leaf = this.app.workspace.openPopoutLeaf({ size: { width: 430, height: 720 } });
+      await leaf.setViewState({
+        type: NOTES_FLOAT_VIEW_TYPE,
+        active: true,
+        state: { videoId: video.id }
+      });
+      await this.app.workspace.revealLeaf(leaf);
+    } catch (error) {
+      console.warn("video-library: could not open floating notes", error);
+      new Notice(t("notes.floatFailed"));
+    }
+  }
+
+  closeNotesFloating(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(NOTES_FLOAT_VIEW_TYPE)) {
+      leaf.detach();
+    }
   }
 
   async loadSettings(): Promise<void> {
@@ -496,6 +534,24 @@ export default class VideoLibraryPlugin extends Plugin {
           }))
       : [];
 
+    const trashImages: TrashImage[] = Array.isArray(loaded.trashImages)
+      ? loaded.trashImages
+          .filter((trash): trash is TrashImage =>
+            Boolean(trash && trash.id && trash.videoId && trash.path && trash.trashPath)
+          )
+          .map((trash) => ({
+            id: String(trash.id),
+            videoId: String(trash.videoId),
+            videoTitle: String(trash.videoTitle || ""),
+            nodeId: String(trash.nodeId || ""),
+            path: String(trash.path),
+            trashPath: String(trash.trashPath),
+            notePath: String(trash.notePath || ""),
+            folderPath: String(trash.folderPath || ""),
+            deletedAt: Number(trash.deletedAt) || Date.now()
+          }))
+      : [];
+
     const settings = {
       ...base.settings,
       ...(loaded.settings || {})
@@ -517,6 +573,13 @@ export default class VideoLibraryPlugin extends Plugin {
       typeof settings.notesRoot === "string" && settings.notesRoot.trim()
         ? settings.notesRoot.trim()
         : "视频笔记";
+    settings.notesGrouping = settings.notesGrouping === "flat" ? "flat" : "video";
+    settings.notesViewMode = settings.notesViewMode === "list" ? "list" : "grid";
+    settings.noteScreenshotWidth = [1280, 1920, 2560, 3840, 0].includes(
+      Number(settings.noteScreenshotWidth)
+    )
+      ? Number(settings.noteScreenshotWidth)
+      : 1920;
     settings.noteAttachmentMode =
       settings.noteAttachmentMode === "same" || settings.noteAttachmentMode === "custom"
         ? settings.noteAttachmentMode
@@ -562,6 +625,7 @@ export default class VideoLibraryPlugin extends Plugin {
       markers,
       noteGroups,
       trashNotes,
+      trashImages,
       settings
     };
 
@@ -609,6 +673,10 @@ export default class VideoLibraryPlugin extends Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType(NOTES_VIEW_TYPE)) {
       const view = leaf.view;
       if (view instanceof NotesView) void view.refresh();
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType(NOTES_FLOAT_VIEW_TYPE)) {
+      const view = leaf.view;
+      if (view instanceof NotesFloatingView) view.refresh();
     }
   }
 

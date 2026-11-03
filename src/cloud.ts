@@ -8,8 +8,13 @@ export function cloudHeaders(provider: CloudProvider, credential: string): Recor
   const value = credential.trim();
   if (!value) return {};
   if (provider === "baidu") {
+    let cookie = value.includes("=") ? value : `BDUSS=${value}`;
+    if (!/(?:^|;\s*)BDUSS=/.test(cookie)) {
+      const match = cookie.match(/(?:^|;\s*)BDUSS_BFESS=([^;]+)/);
+      if (match?.[1]) cookie = `BDUSS=${match[1]}; ${cookie}`;
+    }
     return {
-      Cookie: value.includes("=") ? value : `BDUSS=${value}`,
+      Cookie: cookie,
       Referer: "https://pan.baidu.com/",
       "User-Agent": UA
     };
@@ -37,12 +42,12 @@ export async function testCloudAccount(
   try {
     if (provider === "baidu") {
       const response = await requestUrl({
-        url: 'https://pan.baidu.com/api/gettemplatevariable?fields=["bdstoken"]',
+        url: "https://pan.baidu.com/rest/2.0/xpan/nas?method=uinfo",
         method: "GET",
         headers
       });
-      const data = response.json as { errno?: number; result?: { bdstoken?: string } };
-      if (data.errno === 0 || data.result?.bdstoken) return { ok: true, name: "Baidu Pan" };
+      const data = response.json as { errno?: number; baidu_name?: string };
+      if (data.errno === 0) return { ok: true, name: data.baidu_name || "Baidu Pan" };
       return { ok: false, error: `Baidu errno ${data.errno ?? "unknown"}` };
     }
     if (provider === "quark") {

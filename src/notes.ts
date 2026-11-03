@@ -1,7 +1,7 @@
 import { App, normalizePath, Notice, TFile } from "obsidian";
 import { t } from "./i18n";
 import type VideoLibraryPlugin from "./main";
-import type { NoteGroup, NoteNode, TrashNote, VideoItem } from "./types";
+import type { NoteGroup, NoteNode, TrashImage, TrashNote, VideoItem } from "./types";
 import { uid } from "./types";
 
 const NOTE_MARKER = /^<!--\s*vl-note:\s*(.*?)\s*-->\s*$/;
@@ -193,10 +193,11 @@ export class NoteStore {
   private async createGroup(video: VideoItem): Promise<NoteGroup> {
     const title = sanitizeName(video.title || t("misc.untitled"));
     await this.ensureFolder(this.root);
+    const flat = this.settings.notesGrouping === "flat";
     const folderBase = sanitizeName(`${title}`);
-    let folder = normalizePath(`${this.root}/${folderBase}`);
+    let folder = flat ? this.root : normalizePath(`${this.root}/${folderBase}`);
     let suffix = 1;
-    while (await this.app.vault.adapter.exists(folder)) {
+    while (!flat && (await this.app.vault.adapter.exists(folder))) {
       const noteAt = normalizePath(`${folder}/${sanitizeName(title)}.md`);
       if (await this.app.vault.adapter.exists(noteAt)) {
         const content = await this.app.vault.adapter.read(noteAt);
@@ -519,6 +520,97 @@ export class NoteStore {
     return true;
   }
 
+  private get trashDir(): string {
+    return normalizePath(`${this.plugin.manifest.dir || ".obsidian/plugins/video-library"}/notes-trash/images`);
+  }
+
+  async trashImage(video: VideoItem, node: NoteNode): Promise<boolean> {
+    if (!node.imagePath) return false;
+    const group = await this.resolveGroup(video);
+    const source = node.imagePath;
+    const extension = source.split(".").pop()?.toLowerCase() || "png";
+    const id = uid("trashimg");
+    const trashPath = normalizePath(`${this.trashDir}/${id}.${extension}`);
+    try {
+      const buffer = await this.app.vault.adapter.readBinary(source);
+      await this.ensureFolder(this.trashDir);
+      await this.app.vault.adapter.writeBinary(trashPath, buffer);
+      await this.app.vault.adapter.remove(source);
+    } catch {
+      return false;
+    }
+    const record: TrashImage = {
+      id,
+      videoId: video.id,
+      videoTitle: video.title,
+      nodeId: node.id,
+      path: source,
+      trashPath,
+      notePath: group.notePath,
+      folderPath: group.folderPath,
+      deletedAt: Date.now()
+    };
+    this.plugin.data.trashImages.unshift(record);
+    await this.updateNode(video, { ...node, imagePath: undefined });
+    await this.plugin.persist();
+    return true;
+  }
+
+  async restoreImage(id: string): Promise<boolean> {
+    const record = this.plugin.data.trashImages.find((item) => item.id === id);
+    if (!record) return false;
+    const video = this.plugin.data.videos.find((item) => item.id === record.videoId);
+    if (!video) return false;
+    try {
+      const buffer = await this.app.vault.adapter.readBinary(record.trashPath);
+      const parent = record.path.split("/").slice(0, -1).join("/");
+      if (parent) await this.ensureFolder(parent);
+      await this.app.vault.adapter.writeBinary(record.path, buffer);
+    } catch {
+      return false;
+    }
+    const nodes = await this.listNodes(video);
+    const node = nodes.find((item) => item.id === record.nodeId);
+    if (node) await this.updateNode(video, { ...node, imagePath: record.path });
+    this.plugin.data.trashImages = this.plugin.data.trashImages.filter((item) => item.id !== id);
+    try {
+      await this.app.vault.adapter.remove(record.trashPath);
+    } catch {
+      // Ignore a missing trash copy.
+    }
+    await this.plugin.persist();
+    return true;
+  }
+
+  async purgeImage(id: string): Promise<boolean> {
+    const record = this.plugin.data.trashImages.find((item) => item.id === id);
+    if (!record) return false;
+    try {
+      if (await this.app.vault.adapter.exists(record.trashPath)) {
+        await this.app.vault.adapter.remove(record.trashPath);
+      }
+    } catch {
+      // Ignore.
+    }
+    this.plugin.data.trashImages = this.plugin.data.trashImages.filter((item) => item.id !== id);
+    await this.plugin.persist();
+    return true;
+  }
+
+  async clearTrash(): Promise<void> {
+    for (const trash of [...this.plugin.data.trashNotes]) {
+      await this.purgeTrash(trash.id);
+    }
+    for (const image of [...this.plugin.data.trashImages]) {
+      await this.purgeImage(image.id);
+    }
+    try {
+      await this.app.vault.adapter.rmdir(this.trashDir, true);
+    } catch {
+      // Ignore an already missing trash folder.
+    }
+  }
+
   imagePathsInBlock(block: string): string[] {
     const paths = new Set<string>();
     for (const match of block.matchAll(/!\[\[(.*?)\]\]/g)) {
@@ -629,6 +721,7 @@ export class NoteStore {
   }
 
   async openNote(video: VideoItem): Promise<void> {
+    this.plugin.focusMainWindow();
     const group = await this.resolveGroup(video);
     const file = this.noteFileFor(group);
     if (!file) {

@@ -154,6 +154,48 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
             }
           },
           {
+            name: t("settings.notesGrouping"),
+            desc: t("settings.notesGroupingDesc"),
+            control: {
+              type: "dropdown",
+              key: "notesGrouping",
+              defaultValue: "video",
+              options: {
+                video: t("settings.groupingVideo"),
+                flat: t("settings.groupingFlat")
+              }
+            }
+          },
+          {
+            name: t("settings.notesViewMode"),
+            desc: t("settings.notesViewModeDesc"),
+            control: {
+              type: "dropdown",
+              key: "notesViewMode",
+              defaultValue: "grid",
+              options: {
+                grid: t("settings.notesViewGrid"),
+                list: t("settings.notesViewList")
+              }
+            }
+          },
+          {
+            name: t("settings.noteScreenshotWidth"),
+            desc: t("settings.noteScreenshotWidthDesc"),
+            control: {
+              type: "dropdown",
+              key: "noteScreenshotWidth",
+              defaultValue: "1920",
+              options: {
+                "1280": "1280 × 720",
+                "1920": "1920 × 1080",
+                "2560": "2560 × 1440",
+                "3840": "3840 × 2160",
+                "0": t("settings.screenshotOriginal")
+              }
+            }
+          },
+          {
             name: t("settings.noteAttachmentMode"),
             desc: t("settings.noteAttachmentModeDesc"),
             control: {
@@ -745,6 +787,9 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
     if (key === "scrapeAuto") return this.plugin.data.settings.scrapeAuto;
     if (key === "relatedEnabled") return this.plugin.data.settings.relatedEnabled;
     if (key === "notesRoot") return this.plugin.data.settings.notesRoot;
+    if (key === "notesGrouping") return this.plugin.data.settings.notesGrouping;
+    if (key === "notesViewMode") return this.plugin.data.settings.notesViewMode;
+    if (key === "noteScreenshotWidth") return String(this.plugin.data.settings.noteScreenshotWidth);
     if (key === "noteAttachmentMode") return this.plugin.data.settings.noteAttachmentMode;
     if (key === "noteAttachmentFolder") return this.plugin.data.settings.noteAttachmentFolder;
     if (key === "noteMarkerShortcut") return this.plugin.data.settings.noteMarkerShortcut;
@@ -780,6 +825,18 @@ export class VideoLibrarySettingTab extends PluginSettingTab {
       this.plugin.refreshViews();
     } else if (key === "notesRoot") {
       this.plugin.data.settings.notesRoot = String(value || "").trim() || "视频笔记";
+      await this.plugin.persist();
+    } else if (key === "notesGrouping") {
+      this.plugin.data.settings.notesGrouping = value === "flat" ? "flat" : "video";
+      await this.plugin.persist();
+    } else if (key === "notesViewMode") {
+      this.plugin.data.settings.notesViewMode = value === "list" ? "list" : "grid";
+      await this.plugin.persist();
+      this.plugin.refreshViews();
+    } else if (key === "noteScreenshotWidth") {
+      const width = Number(value);
+      this.plugin.data.settings.noteScreenshotWidth =
+        [1280, 1920, 2560, 3840, 0].includes(width) ? width : 1920;
       await this.plugin.persist();
     } else if (key === "noteAttachmentMode") {
       const mode = String(value || "subfolder") as NoteAttachmentMode;

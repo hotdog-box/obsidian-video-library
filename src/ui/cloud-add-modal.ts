@@ -3,6 +3,7 @@ import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { CloudProvider, VideoItem } from "../types";
 import { UNCATEGORIZED_ID, uid } from "../types";
+import { CloudHelpModal } from "./cloud-help-modal";
 
 const PROVIDERS: Array<{ value: CloudProvider; key: string }> = [
   { value: "baidu", key: "cloud.baidu" },
@@ -25,6 +26,12 @@ export class CloudAddModal extends Modal {
   onOpen(): void {
     this.titleEl.setText(t("cloud.addTitle"));
     this.contentEl.createEl("p", { text: t("cloud.addDesc"), cls: "vl-modal-description" });
+    const help = this.contentEl.createEl("button", {
+      cls: "vl-cloud-help-link",
+      text: t("cloud.helpButton"),
+      attr: { type: "button" }
+    });
+    help.addEventListener("click", () => new CloudHelpModal(this.app).open());
     const providerField = this.contentEl.createDiv({ cls: "vl-field" });
     providerField.createEl("label", { text: t("cloud.provider"), cls: "vl-field-label" });
     this.provider = providerField.createEl("select", { cls: "dropdown" });

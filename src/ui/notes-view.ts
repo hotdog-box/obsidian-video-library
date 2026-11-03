@@ -50,7 +50,9 @@ export class NotesView extends ItemView {
 
   private async render(): Promise<void> {
     this.contentEl.empty();
-    const root = this.contentEl.createDiv({ cls: "vl-notes-manager" });
+    const root = this.contentEl.createDiv({
+      cls: `vl-notes-manager${this.plugin.data.settings.notesViewMode === "list" ? " is-list" : ""}`
+    });
     const head = root.createDiv({ cls: "vl-notes-manager-head" });
     const title = head.createDiv({ cls: "vl-notes-manager-title" });
     title.createEl("h2", { text: t("notes.title") });
@@ -61,8 +63,15 @@ export class NotesView extends ItemView {
       attr: { type: "button" }
     });
     setIcon(trash.createSpan({ cls: "vl-btn-icon" }), "trash-2");
-    trash.createSpan({ text: t("notes.trash", { count: this.plugin.data.trashNotes.length }) });
-    trash.addEventListener("click", () => new TrashNotesModal(this.app, this.plugin, () => void this.render()).open());
+    trash.createSpan({
+      text: t("notes.trash", {
+        count: this.plugin.data.trashNotes.length + this.plugin.data.trashImages.length
+      })
+    });
+    trash.addEventListener("click", () => {
+      this.plugin.focusMainWindow();
+      new TrashNotesModal(this.app, this.plugin, () => void this.render()).open();
+    });
     const refresh = actions.createEl("button", {
       cls: "vl-notes-manager-action",
       attr: { type: "button" }
@@ -114,6 +123,7 @@ export class NotesView extends ItemView {
     });
     setIcon(coverButton, "image");
     coverButton.addEventListener("click", () => {
+      this.plugin.focusMainWindow();
       pickVaultFile(this.app, "image", (file) => {
         void this.plugin.noteStore.setGroupCover(video, file.path).then(() => this.render());
       });
@@ -123,7 +133,10 @@ export class NotesView extends ItemView {
       attr: { type: "button", title: t("notes.open"), "aria-label": t("notes.open") }
     });
     setIcon(noteButton, "file-text");
-    noteButton.addEventListener("click", () => void this.plugin.noteStore.openNote(video));
+    noteButton.addEventListener("click", () => {
+      this.plugin.focusMainWindow();
+      void this.plugin.noteStore.openNote(video);
+    });
     const playButton = actions.createEl("button", {
       cls: "vl-notes-manager-action is-small is-primary",
       attr: { type: "button", title: t("notes.openVideo"), "aria-label": t("notes.openVideo") }
@@ -186,6 +199,7 @@ export class NotesView extends ItemView {
   }
 
   private confirmDelete(video: VideoItem, node: NoteNode): void {
+    this.plugin.focusMainWindow();
     new ConfirmModal(this.app, {
       title: t("notes.deleteTitle"),
       description: t("notes.deleteDesc", { time: formatClock(node.time) }),

@@ -98,6 +98,18 @@ export interface TrashNote {
   deletedAt: number;
 }
 
+export interface TrashImage {
+  id: string;
+  videoId: string;
+  videoTitle: string;
+  nodeId: string;
+  path: string;
+  trashPath: string;
+  notePath: string;
+  folderPath: string;
+  deletedAt: number;
+}
+
 export const DEFAULT_MARKERS: Marker[] = [
   {
     id: "marker_bilibili",
@@ -231,8 +243,11 @@ export interface PluginSettings {
   scrapeAuto: boolean;
   relatedEnabled: boolean;
   notesRoot: string;
+  notesGrouping: "video" | "flat";
+  notesViewMode: "grid" | "list";
   noteAttachmentMode: NoteAttachmentMode;
   noteAttachmentFolder: string;
+  noteScreenshotWidth: number;
   noteMarkerShortcut: string;
   noteSummaryShortcut: string;
   bilibiliCookie: string;
@@ -250,6 +265,7 @@ export interface PluginData {
   markers: Marker[];
   noteGroups: NoteGroup[];
   trashNotes: TrashNote[];
+  trashImages: TrashImage[];
   settings: PluginSettings;
 }
 
@@ -300,8 +316,11 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   scrapeAuto: false,
   relatedEnabled: true,
   notesRoot: "视频笔记",
+  notesGrouping: "video",
+  notesViewMode: "grid",
   noteAttachmentMode: "subfolder",
   noteAttachmentFolder: "attachments",
+  noteScreenshotWidth: 1920,
   noteMarkerShortcut: "Alt+M",
   noteSummaryShortcut: "Alt+G",
   bilibiliCookie: "",
@@ -323,6 +342,7 @@ export function createDefaultData(): PluginData {
     })),
     noteGroups: [],
     trashNotes: [],
+    trashImages: [],
     settings: {
       ...DEFAULT_SETTINGS,
       cloudAccounts: defaultCloudAccounts()

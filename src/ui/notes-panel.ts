@@ -69,6 +69,9 @@ export class NotesPanel {
     this.toolButton(toolbar, "map-pin-plus", t("notes.mark"), () => void this.markCurrent(), true);
     this.toolButton(toolbar, "minus", t("notes.summary"), () => void this.insertSummary());
     this.toolButton(toolbar, "file-text", t("notes.open"), () => void this.plugin.noteStore.openNote(this.video));
+    this.toolButton(toolbar, "picture-in-picture-2", t("notes.float"), () => {
+      void this.plugin.openNotesFloating(this.video);
+    });
 
     this.panelEl.createDiv({
       cls: "vl-notes-hint",
@@ -234,14 +237,12 @@ export class NotesPanel {
 
   private async removeImage(node: NoteNode): Promise<void> {
     if (!node.imagePath) return;
-    const path = node.imagePath;
-    const updated = { ...node, imagePath: undefined };
-    await this.plugin.noteStore.updateNode(this.video, updated);
-    try {
-      if (await this.app.vault.adapter.exists(path)) await this.app.vault.adapter.remove(path);
-    } catch {
-      // Missing attachments should not block removing the embed.
+    const ok = await this.plugin.noteStore.trashImage(this.video, node);
+    if (!ok) {
+      new Notice(t("notes.removeImageFailed"));
+      return;
     }
+    new Notice(t("notes.imageTrashed"));
     await this.reload();
   }
 
@@ -290,7 +291,7 @@ export class NotesPanel {
     let buffer: ArrayBuffer | null = null;
     if (video) {
       buffer = await this.plugin.coverStore.captureVideoElement(video, {
-        maxWidth: 0,
+        maxWidth: this.plugin.data.settings.noteScreenshotWidth || 1920,
         type: "image/png",
         quality: 1
       });

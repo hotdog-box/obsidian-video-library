@@ -1,6 +1,7 @@
 import { Notice, Plugin, requestUrl, TFile, WorkspaceLeaf } from "obsidian";
 import { CoverStore } from "./covers";
 import { setLanguage, t } from "./i18n";
+import { resolveBilibiliStream } from "./bilibili";
 import { cloudHeaders, testCloudAccount as testCloudAccountRequest } from "./cloud";
 import { NoteStore } from "./notes";
 import { StreamServer } from "./stream-server";
@@ -158,6 +159,7 @@ export default class VideoLibraryPlugin extends Plugin {
   noteStore!: NoteStore;
   activePlayer: VideoPlayerModal | null = null;
   noteWriteGuard = 0;
+  private previewSourceCache = new Map<string, { source: string; at: number }>();
   streamServer = new StreamServer();
   latestRelease: UpdateRelease | null = null;
   updateChecking = false;
@@ -2044,6 +2046,26 @@ export default class VideoLibraryPlugin extends Plugin {
     account.displayName = undefined;
     await this.persist();
     this.refreshViews();
+  }
+
+  async getPreviewSource(video: VideoItem): Promise<string | null> {
+    if (video.provider !== "bilibili") return this.getVideoSource(video);
+    const key = `${video.id}:${video.page || 1}`;
+    const cached = this.previewSourceCache.get(key);
+    if (cached && Date.now() - cached.at < 5 * 60 * 1000) return cached.source;
+    try {
+      await this.streamServer.start();
+      const info = await resolveBilibiliStream(
+        video,
+        this.data.settings.bilibiliCookie,
+        this.streamServer
+      );
+      if (!info?.videoUrl) return null;
+      this.previewSourceCache.set(key, { source: info.videoUrl, at: Date.now() });
+      return info.videoUrl;
+    } catch {
+      return null;
+    }
   }
 
   getVideoSource(video: VideoItem): string | null {

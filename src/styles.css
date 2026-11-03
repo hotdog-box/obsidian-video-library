@@ -6560,3 +6560,37 @@ button.vl-sidebar-notes-button:hover {
   margin-top: 10px;
   border-top: 1px solid var(--background-modifier-border);
 }
+
+.vl-note-images {
+  grid-template-columns: 1fr;
+}
+
+.vl-note-images .vl-note-image {
+  aspect-ratio: auto;
+  background: transparent;
+}
+
+.vl-note-images .vl-note-image img {
+  width: 100%;
+  height: auto;
+  max-height: min(60vh, 520px);
+  object-fit: contain;
+}
+
+.vl-note-image {
+  background: transparent;
+}
+
+.vl-note-image img {
+  max-height: min(60vh, 520px);
+  object-fit: contain;
+}
+
+.vl-tag.is-clickable {
+  cursor: pointer;
+}
+
+.vl-tag.is-clickable:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}

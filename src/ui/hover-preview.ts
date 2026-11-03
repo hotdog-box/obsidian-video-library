@@ -5,6 +5,7 @@ import { DEFAULT_PREVIEW_DURATION, MAX_PREVIEW_DURATION, type PreviewClip } from
 interface HoverPreviewOptions {
   duration?: number;
   clips?: PreviewClip[];
+  sourceResolver?: () => Promise<string | null>;
   fallbackDuration?: number;
   muted?: boolean;
   volume?: number;
@@ -42,8 +43,27 @@ export class HoverPreview {
   }
 
   start(): void {
-    if (!this.source || this.stopped) return;
-    HoverPreview.stopActive();
+    if (this.stopped) return;
+    if (!this.source && this.options.sourceResolver) {
+      this.cover.addClass("is-previewing");
+      if (HoverPreview.active && HoverPreview.active !== this) HoverPreview.active.stop();
+      HoverPreview.active = this;
+      const resolver = this.options.sourceResolver;
+      this.options.sourceResolver = undefined;
+      resolver()
+        .then((source) => {
+          if (this.stopped || !source) {
+            this.stop();
+            return;
+          }
+          this.source = source;
+          this.start();
+        })
+        .catch(() => this.stop());
+      return;
+    }
+    if (!this.source) return;
+    if (HoverPreview.active && HoverPreview.active !== this) HoverPreview.active.stop();
     HoverPreview.active = this;
 
     this.cover.addClass("is-previewing");

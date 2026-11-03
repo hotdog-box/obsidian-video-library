@@ -42,6 +42,8 @@ export class NotesPanel {
   private editorImages: string[] = [];
   private collapsed = new Set<string>();
   private manualCollapse = new Set<string>();
+  private collapsedCards = new Set<string>();
+  private bodyDropBound = false;
 
   constructor(
     private app: App,
@@ -146,6 +148,21 @@ export class NotesPanel {
 
   private render(): void {
     this.bodyEl.empty();
+    if (!this.bodyDropBound) {
+      this.bodyDropBound = true;
+      this.bodyEl.addEventListener("dragover", (event) => event.preventDefault());
+      this.bodyEl.addEventListener("drop", (event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest(".vl-note-node, .vl-note-section")) return;
+        const nodeId = event.dataTransfer?.getData("text/vl-note");
+        if (nodeId) {
+          event.preventDefault();
+          void this.plugin.noteStore
+            .assignGroup(this.video, nodeId, undefined)
+            .then(() => this.reload());
+        }
+      });
+    }
     this.renderTree();
     if (this.nodes.length === 0) {
       const empty = this.bodyEl.createDiv({ cls: "vl-notes-empty" });
@@ -175,6 +192,7 @@ export class NotesPanel {
     el.addEventListener("dragleave", () => el.removeClass("is-drop-target"));
     el.addEventListener("drop", (event) => {
       event.preventDefault();
+      event.stopPropagation();
       el.removeClass("is-drop-target");
       const nodeId = event.dataTransfer?.getData("text/vl-note");
       if (nodeId) {
@@ -207,9 +225,10 @@ export class NotesPanel {
   private renderTree(): void {
     this.treeEl.empty();
     if (this.nodes.length === 0) return;
-    const ids = new Set(this.nodes.map((node) => node.id));
+    const ordered = [...this.nodes].sort((a, b) => a.time - b.time);
+    const ids = new Set(ordered.map((node) => node.id));
     const children = new Map<string, NoteNode[]>();
-    for (const node of this.nodes) {
+    for (const node of ordered) {
       const parent = node.parentId && ids.has(node.parentId) ? node.parentId : "";
       const list = children.get(parent) || [];
       list.push(node);
@@ -283,6 +302,7 @@ export class NotesPanel {
     card.addEventListener("dragleave", () => card.removeClass("is-drop-target"));
     card.addEventListener("drop", (event) => {
       event.preventDefault();
+      event.stopPropagation();
       card.removeClass("is-drop-target");
       const from = event.dataTransfer?.getData("text/vl-note");
       if (!from || from === node.id) return;
@@ -311,6 +331,27 @@ export class NotesPanel {
     if (this.editingId !== node.id) {
       head.createSpan({ cls: "vl-note-comment", text: node.comment || "—" });
       const actions = head.createDiv({ cls: "vl-note-node-actions" });
+      const fold = actions.createEl("button", {
+        cls: "vl-note-action",
+        attr: {
+          type: "button",
+          title: this.collapsedCards.has(node.id) ? t("notes.expandNode") : t("notes.collapseNode"),
+          "aria-label": t("notes.collapseNode")
+        }
+      });
+      setIcon(fold, this.collapsedCards.has(node.id) ? "chevron-right" : "chevron-down");
+      fold.addEventListener("click", () => {
+        if (this.collapsedCards.has(node.id)) this.collapsedCards.delete(node.id);
+        else this.collapsedCards.add(node.id);
+        this.render();
+      });
+      if (this.collapsedCards.has(node.id)) {
+        if (node.tags.length > 0) {
+          const tags = card.createDiv({ cls: "vl-note-tags" });
+          for (const tag of node.tags) tags.createSpan({ cls: "vl-note-tag", text: `#${tag}` });
+        }
+        return;
+      }
       const edit = actions.createEl("button", {
         cls: "vl-note-action",
         attr: { type: "button", title: t("notes.edit"), "aria-label": t("notes.edit") }

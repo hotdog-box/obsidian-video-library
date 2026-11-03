@@ -563,3 +563,11 @@ npm run dev        # watch
 - `syncPreview` 覆盖视频编辑页的 preview；`previewFromNotes` 标记来源。
 - 自动截图是 `coverImage`，不是总结内图片；粘贴图片必须留在 summary Markdown 里。
 - 删除总结图片走 `trashImage(video,node,path)`，恢复会插回 summary。
+
+### 10.9 最新交互约束
+
+- 卡片拖动排序依赖 `parseNodes` 返回文件顺序；不要重新按时间 sort。
+- 左侧节点树按时间排序，卡片按文件顺序。
+- 在线 B 站悬停预览必须通过本地 StreamServer，不能直接用 B 站 URL。
+- 标签点击要跨全部文件夹，不能沿用当前 `currentFolderId`。
+- 笔记图片容器不要固定 aspect-ratio/黑色背景，图片用 `width:100%;height:auto;object-fit:contain`。

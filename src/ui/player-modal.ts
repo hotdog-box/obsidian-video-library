@@ -62,7 +62,9 @@ export class VideoPlayerModal extends Modal {
   private noteNodes: NoteNode[] = [];
   private audioEl: HTMLAudioElement | null = null;
   private qualities: BilibiliQuality[] = [];
+  private pages: Array<{ page: number; title: string; cid: number }> = [];
   private qualitySelect: HTMLSelectElement | null = null;
+  private pageSelect: HTMLSelectElement | null = null;
   private speedSelect: HTMLSelectElement | null = null;
   private currentQualityId = 0;
   private qualityBadge: HTMLElement | null = null;
@@ -853,6 +855,7 @@ export class VideoPlayerModal extends Modal {
       }
       loading.remove();
       this.qualities = info.qualities || [];
+      this.pages = info.pages || [];
       this.currentQualityId = this.qualities[0]?.id || 0;
       this.setupNativePlayer(container, info.videoUrl, info.audioUrl, true);
       if (info.quality) {
@@ -896,6 +899,20 @@ export class VideoPlayerModal extends Modal {
 
     this.buildControls(container, this.videoEl);
     this.wireVideo(this.videoEl);
+  }
+
+  private async switchPage(page: number): Promise<void> {
+    if (!Number.isFinite(page) || page <= 0) return;
+    this.videoEl?.pause();
+    this.audioEl?.pause();
+    this.item.page = page;
+    void this.plugin.persist();
+    this.startTime = 0;
+    this.startApplied = false;
+    this.notesPanel?.destroy();
+    this.notesPanel = null;
+    this.render();
+    this.plugin.activePlayer = this;
   }
 
   private async switchQuality(id: number): Promise<void> {
@@ -990,6 +1007,23 @@ export class VideoPlayerModal extends Modal {
     this.buildScrubPreview(container, video);
 
     this.totalLabel = bar.createSpan({ cls: "vl-player-time", text: "--:--" });
+
+    if (this.pages.length > 1) {
+      this.pageSelect = bar.createEl("select", {
+        cls: "vl-player-quality-select",
+        attr: { "aria-label": t("player.part") }
+      });
+      for (const part of this.pages) {
+        this.pageSelect.createEl("option", {
+          value: String(part.page),
+          text: part.title
+        });
+      }
+      this.pageSelect.value = String(this.item.page || this.pages[0].page);
+      this.pageSelect.addEventListener("change", () => {
+        void this.switchPage(Number(this.pageSelect?.value));
+      });
+    }
 
     if (this.qualities.length > 1) {
       this.qualitySelect = bar.createEl("select", {

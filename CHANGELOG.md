@@ -15,6 +15,9 @@
 - Add whole-note deletion to the recycle bin (folder, Markdown and attachments), with restore and permanent deletion.
 - Add recycle-bin search, group-by-video, multi-select permanent deletion, and timestamps on deleted screenshots.
 - Add note-derived hover previews (2-second clips, 10-second total by default) and settings for clip length, total duration and maximum duration.
+- Add online hover previews for Bilibili and cloud videos.
+- Add Bilibili part/episode selection from the player and preserve `?p=` page numbers when importing URLs.
+- Add per-node collapse, card drag ordering (file order preserved), tag filtering across all folders, and fix oversized note images in wide note panels.
 - Add a notes manager button under “Add video”, a note shortcut on video cards/list rows, and refresh the notes manager when notes close/change.
 - Fix Bilibili login by parsing Set-Cookie as well as the redirect URL; fix Baidu login validation via `xpan/nas?method=uinfo`.
 - Add Bilibili quality labels and a local stream proxy for Bilibili/cloud playback.

@@ -52,6 +52,7 @@ export interface BilibiliStreamInfo {
   quality: string;
   referer: string;
   qualities: BilibiliQuality[];
+  pages: BilibiliPage[];
 }
 
 function cookieHeader(cookie: string): Record<string, string> {
@@ -165,19 +166,39 @@ export async function getBilibiliUser(cookie: string): Promise<{ name: string; a
   }
 }
 
-async function getCid(id: string, cookie: string): Promise<number | undefined> {
+export interface BilibiliPage {
+  cid: number;
+  page: number;
+  title: string;
+  duration?: number;
+}
+
+async function getPages(id: string, cookie: string): Promise<BilibiliPage[]> {
   try {
     const param = /^av\d+$/i.test(id)
       ? `aid=${encodeURIComponent(id.slice(2))}`
       : `bvid=${encodeURIComponent(id)}`;
-    const response = await biliGet<Array<{ cid?: number; page?: number }>>(
+    const response = await biliGet<Array<{ cid?: number; page?: number; part?: string; duration?: number }>>(
       `https://api.bilibili.com/x/player/pagelist?${param}&jsonp=jsonp`,
       cookie
     );
-    return response.code === 0 ? Number(response.data?.[0]?.cid) || undefined : undefined;
+    if (response.code !== 0) return [];
+    return (response.data || [])
+      .filter((item) => Number(item.cid))
+      .map((item) => ({
+        cid: Number(item.cid),
+        page: Number(item.page) || 1,
+        title: String(item.part || `P${item.page || 1}`),
+        duration: Number(item.duration) || undefined
+      }));
   } catch {
-    return undefined;
+    return [];
   }
+}
+
+async function getCid(id: string, cookie: string, page = 1): Promise<number | undefined> {
+  const pages = await getPages(id, cookie);
+  return (pages.find((item) => item.page === page) || pages[0])?.cid;
 }
 
 interface DashMedia {
@@ -207,7 +228,8 @@ export async function resolveBilibiliStream(
   const parsed = video.url ? parseVideoUrl(video.url) : null;
   const bvid = video.videoId || parsed?.videoId;
   if (!bvid) return null;
-  const cid = await getCid(bvid, cookie);
+  const pages = await getPages(bvid, cookie);
+  const cid = await getCid(bvid, cookie, Number(video.page) || 1);
   if (!cid) return null;
   const isAv = /^av\d+$/i.test(bvid);
   const query = new URLSearchParams({
@@ -258,7 +280,8 @@ export async function resolveBilibiliStream(
       duration: data.dash.duration,
       quality: selected.label,
       referer,
-      qualities
+      qualities,
+      pages
     };
   }
 
@@ -270,6 +293,7 @@ export async function resolveBilibiliStream(
       duration: data.durl?.[0]?.length,
       quality,
       referer,
+      pages,
       qualities: [
         {
           id: Number(data.quality) || 64,

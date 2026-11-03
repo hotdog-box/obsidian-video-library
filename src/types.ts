@@ -243,6 +243,7 @@ export interface VideoItem {
   noteFolder?: string;
   noteCoverPath?: string;
   duration?: number;
+  page?: number;
   epId?: number;
   preview?: PreviewConfig;
   previewFromNotes?: boolean;

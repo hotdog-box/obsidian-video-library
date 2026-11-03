@@ -386,7 +386,7 @@ export class NoteStore {
         createdAt: Number(data.createdAt) || Date.now()
       });
     }
-    return nodes.sort((a, b) => a.time - b.time);
+    return nodes;
   }
 
   async discoverGroups(): Promise<void> {
@@ -426,10 +426,12 @@ export class NoteStore {
       const clipDuration = Math.max(1, Math.min(settings.notePreviewMax, settings.notePreviewDuration));
       video.preview = {
         duration: Math.min(settings.notePreviewMax, Math.max(1, settings.notePreviewTotal)),
-        clips: nodes.map((node) => ({
-          start: node.time,
-          end: node.time + clipDuration
-        }))
+        clips: [...nodes]
+          .sort((a, b) => a.time - b.time)
+          .map((node) => ({
+            start: node.time,
+            end: node.time + clipDuration
+          }))
       };
       video.previewFromNotes = true;
     } else if (video.previewFromNotes) {

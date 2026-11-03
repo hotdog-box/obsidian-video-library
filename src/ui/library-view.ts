@@ -1206,11 +1206,22 @@ export class VideoLibraryView extends ItemView {
   private toggleTagFilter(name: string): void {
     if (this.selectedTags.has(name)) {
       this.selectedTags.delete(name);
-    } else {
-      this.selectedTags.add(name);
+      this.updateTagFilterUi();
+      this.renderGrid();
+      return;
     }
-    this.updateTagFilterUi();
-    this.renderGrid();
+    this.showTagAcrossAll(name);
+  }
+
+  private showTagAcrossAll(name: string): void {
+    this.filter = "all";
+    this.currentFolderId = null;
+    this.selectedTags.clear();
+    this.selectedTags.add(name);
+    this.query = "";
+    if (this.searchInput) this.searchInput.value = "";
+    this.updateNavActive();
+    this.render();
   }
 
   private clearTagFilter(): void {
@@ -1902,15 +1913,20 @@ export class VideoLibraryView extends ItemView {
   }
 
   private attachHoverPreview(host: HTMLElement, cover: HTMLElement, video: VideoItem): void {
-    const previewSource =
-      video.provider === "local" || video.provider === "direct" ? this.plugin.getVideoSource(video) : null;
-    if (!previewSource) return;
+    const synchronousSource =
+      video.provider === "local" || video.provider === "direct" || video.provider === "cloud"
+        ? this.plugin.getVideoSource(video)
+        : null;
+    const sourceResolver =
+      video.provider === "bilibili" ? () => this.plugin.getPreviewSource(video) : undefined;
+    if (!synchronousSource && !sourceResolver) return;
     let preview: HoverPreview | null = null;
     host.addEventListener("mouseenter", () => {
       preview?.stop();
-      preview = new HoverPreview(previewSource, cover, {
+      preview = new HoverPreview(synchronousSource || "", cover, {
         duration: video.preview?.duration,
         clips: video.preview?.clips,
+        sourceResolver,
         fallbackDuration: video.duration,
         muted: this.plugin.data.settings.previewMuted,
         volume: this.plugin.data.settings.previewVolume,
@@ -1993,7 +2009,13 @@ export class VideoLibraryView extends ItemView {
     meta.createSpan({ text: formatDate(video.createdAt), cls: "vl-list-date" });
     if (video.tags.length > 0) {
       const tags = main.createDiv({ cls: "vl-list-tags" });
-      for (const tag of video.tags.slice(0, 4)) tags.createSpan({ text: `#${tag}`, cls: "vl-tag" });
+      for (const tag of video.tags.slice(0, 4)) {
+        const chip = tags.createSpan({ text: `#${tag}`, cls: "vl-tag is-clickable" });
+        chip.addEventListener("click", (event) => {
+          event.stopPropagation();
+          this.showTagAcrossAll(tag);
+        });
+      }
       if (video.tags.length > 4) {
         tags.createSpan({ text: `+${video.tags.length - 4}`, cls: "vl-tag vl-tag-more" });
       }
@@ -2332,6 +2354,7 @@ export class VideoLibraryView extends ItemView {
     card.addEventListener("dragstart", (event) => this.onCardDragStart(event, "video", video.id, card));
     card.addEventListener("dragend", () => this.clearDragState());
     const cover = card.createDiv({ cls: "vl-card-cover" });
+    this.attachHoverPreview(cover, cover, video);
     const check = cover.createEl("button", {
       cls: "vl-card-check",
       attr: {
@@ -2439,7 +2462,11 @@ export class VideoLibraryView extends ItemView {
     if (video.tags.length > 0) {
       const tags = body.createDiv({ cls: "vl-card-tags" });
       for (const tag of video.tags.slice(0, 3)) {
-        tags.createSpan({ text: `#${tag}`, cls: "vl-tag" });
+        const chip = tags.createSpan({ text: `#${tag}`, cls: "vl-tag is-clickable" });
+        chip.addEventListener("click", (event) => {
+          event.stopPropagation();
+          this.showTagAcrossAll(tag);
+        });
       }
       if (video.tags.length > 3) {
         tags.createSpan({ text: `+${video.tags.length - 3}`, cls: "vl-tag vl-tag-more" });

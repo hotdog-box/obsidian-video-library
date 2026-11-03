@@ -1207,6 +1207,7 @@ export class VideoEditModal extends Modal {
         localLinkPath: isLocal && this.localExternal ? this.item?.localLinkPath : undefined,
         lastPlayedAt: this.item?.lastPlayedAt,
         duration: this.metadata?.duration || this.item?.duration,
+        page: parsed?.page || this.item?.page,
         epId: this.metadata?.epId || parsed?.epId || this.item?.epId,
         preview: this.previewConfig,
         previewFromNotes:

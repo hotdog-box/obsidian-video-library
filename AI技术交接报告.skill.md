@@ -30,7 +30,8 @@ GitHub：
 ```text
 https://github.com/hotdog-box/obsidian-video-library
 branch: main
-latest commit: 20fbdc5 fix: preserve tag search and include folder videos
+latest feature commit: 20fbdc5 fix: preserve tag search and include folder videos
+docs commit: see latest `git log` (documentation is updated after the feature commit)
 ```
 
 当前主库状态：

@@ -308,6 +308,17 @@ export class NotesPanel {
   }
 
   async insertSummary(): Promise<void> {
+    if (this.editingId) {
+      const node = this.nodes.find((item) => item.id === this.editingId);
+      const editor = this.bodyEl.querySelector<HTMLElement>(".vl-note-editor");
+      const fields = editor?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+        "input, textarea"
+      );
+      const save = editor?.querySelector<HTMLButtonElement>(".mod-cta");
+      if (node && fields && fields.length >= 3 && save) {
+        await this.saveNode(node, fields[0].value, fields[1].value, fields[2].value, save);
+      }
+    }
     await this.plugin.noteStore.appendDivider(this.video);
     await this.reload();
     const video = this.host.getVideoElement();

@@ -113,15 +113,22 @@ export class VideoPlayerModal extends Modal {
 
   private onShortcut(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
-    if (
+    const inField = Boolean(
       target &&
-      (target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable)
-    ) {
-      return;
-    }
-    if (this.matchesShortcut(event, this.plugin.data.settings.noteMarkerShortcut || "Alt+M")) {
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+    );
+    const markMatch = this.matchesShortcut(
+      event,
+      this.plugin.data.settings.noteMarkerShortcut || "Alt+M"
+    );
+    const summaryMatch = this.matchesShortcut(
+      event,
+      this.plugin.data.settings.noteSummaryShortcut || "Alt+G"
+    );
+    if (inField && !markMatch && !summaryMatch) return;
+    if (markMatch) {
       event.preventDefault();
       event.stopPropagation();
       if (!this.notesPanel) {
@@ -132,7 +139,7 @@ export class VideoPlayerModal extends Modal {
       }
       return;
     }
-    if (this.matchesShortcut(event, this.plugin.data.settings.noteSummaryShortcut || "Alt+G")) {
+    if (summaryMatch) {
       event.preventDefault();
       event.stopPropagation();
       if (!this.notesPanel) {

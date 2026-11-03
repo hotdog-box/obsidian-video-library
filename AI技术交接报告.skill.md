@@ -55,6 +55,7 @@ release: https://github.com/hotdog-box/obsidian-video-library/releases/tag/0.9.1
 - 标签：保留原有搜索逻辑；标签筛选会带上所有文件夹中的匹配视频，并在全部视频区域直接显示。
 - 侧边栏“视频笔记管理”、卡片“打开笔记”、关闭笔记后刷新管理页。
 - 百度登录验证修复：`xpan/nas?method=uinfo`。
+- Obsidian 0.9.1 审核修复：流代理恢复 TLS 证书校验；笔记 Markdown 使用独立 `Component`；文件删除改用 `FileManager.trashFile()`；配置目录改用 `Vault.configDir`；README 顶部增加英文介绍。
 
 ### 0.3 明天接着改时先做
 
@@ -538,7 +539,7 @@ npm run dev        # watch
 
 ---
 
-## 10.5 0.9.1 笔记 / B 站 / 网盘 / 更新
+## 10.5 0.9.0 笔记 / B 站 / 网盘 / 更新
 
 ### 新文件
 
@@ -657,7 +658,7 @@ npm run dev        # watch
 - 清单：`manifest.json`
 - 本地站点模板：`刮削站点导入代码/刮削站点模板.json`（不提交）
 
-### 10.6 0.9.1 补充约束
+### 10.6 0.9.0 补充约束
 
 - 全屏笔记栏在 `.vl-player-stage:fullscreen` 下显示；不要把它移到 modal 外层。
 - 悬浮笔记是 Obsidian popout `NotesFloatingView`；打开 Modal 前务必 `focusMainWindow()`，否则会进到悬浮窗。

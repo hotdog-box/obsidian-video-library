@@ -6,7 +6,7 @@ interface HttpModule {
   get: (url: string, options: Record<string, unknown>, callback: (response: IncomingMessage) => void) => ClientRequest;
 }
 
-interface HttpsModule extends HttpModule {}
+type HttpsModule = HttpModule;
 
 function loadNode<T>(id: string): T | null {
   const loader = (window as unknown as { require?: (module: string) => unknown }).require;
@@ -95,8 +95,7 @@ export class StreamServer {
       target.toString(),
       {
         method: "GET",
-        headers,
-        rejectUnauthorized: false
+        headers
       },
       (upstream) => {
         if (

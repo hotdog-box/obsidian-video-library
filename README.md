@@ -1,5 +1,9 @@
 # 视频库 / Video Library
 
+Video Library is a desktop-only Obsidian plugin for collecting, organizing and watching video links and local video files in one cover grid. It supports Bilibili, YouTube, Vimeo, direct video URLs, local files, timestamped Markdown notes, cloud-drive streams, tags, folders and hover previews.
+
+## 中文说明
+
 一个给 Obsidian 用的视频链接收藏插件：把 B 站、YouTube、Vimeo、视频直链或本地视频收进一个带封面的网格里，用自定义分类、标签、收藏和搜索来整理。
 
 ![视频库界面](docs/demo-grid.png)
@@ -30,11 +34,11 @@ See the Chinese sections below for the complete feature list and usage notes.
 
 ---
 
-> 当前版本：`0.9.0`
+> 当前版本：`0.9.1`
 > 已在 Obsidian `1.15.0`（Windows 桌面版）实际测试通过。
 > 插件类型：仅桌面端。
 > 最新功能提交：`20fbdc5`（`main`）；文档更新提交见 `git log`。
-> 发布版本：[0.9.0 Release](https://github.com/hotdog-box/obsidian-video-library/releases/tag/0.9.0)。
+> 发布版本：[0.9.1 Release](https://github.com/hotdog-box/obsidian-video-library/releases/tag/0.9.1)。
 
 ### 交接状态
 

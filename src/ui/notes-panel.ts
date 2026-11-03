@@ -1,4 +1,4 @@
-import { App, MarkdownRenderer, Menu, Notice, setIcon, TFile } from "obsidian";
+import { App, Component, MarkdownRenderer, Menu, Notice, setIcon, TFile } from "obsidian";
 import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { NoteNode, NoteSection, VideoItem } from "../types";
@@ -44,6 +44,7 @@ export class NotesPanel {
   private manualCollapse = new Set<string>();
   private collapsedCards = new Set<string>();
   private bodyDropBound = false;
+  private readonly renderComponent = new Component();
 
   constructor(
     private app: App,
@@ -52,6 +53,7 @@ export class NotesPanel {
     private host: NotesPlayerHost,
     parent: HTMLElement
   ) {
+    this.renderComponent.load();
     this.panelEl = parent.createDiv({ cls: "vl-notes-panel" });
     this.panelEl.createDiv({
       cls: "vl-notes-kicker",
@@ -444,7 +446,7 @@ export class NotesPanel {
           summary.value,
           preview,
           this.video.notePath || "",
-          this.plugin
+          this.renderComponent
         );
       }, 120);
     };
@@ -507,7 +509,13 @@ export class NotesPanel {
       return;
     }
     const content = wrap.createDiv({ cls: "vl-note-summary vl-note-summary-markdown" });
-    void MarkdownRenderer.render(this.app, node.summary, content, this.video.notePath || "", this.plugin).then(() => {
+    void MarkdownRenderer.render(
+      this.app,
+      node.summary,
+      content,
+      this.video.notePath || "",
+      this.renderComponent
+    ).then(() => {
       this.attachSummaryImageControls(content, node);
     });
   }
@@ -652,6 +660,7 @@ export class NotesPanel {
   }
 
   destroy(): void {
+    this.renderComponent.unload();
     this.panelEl.remove();
   }
 

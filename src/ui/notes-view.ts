@@ -1,4 +1,4 @@
-import { App, ItemView, Notice, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, setIcon, WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { NoteGroup, NoteNode, VideoItem } from "../types";

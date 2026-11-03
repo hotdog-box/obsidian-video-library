@@ -75,7 +75,7 @@ async function biliGetWithHeaders<T>(
   });
   return {
     json: response.json as BiliResponse<T>,
-    headers: (response.headers || {}) as Record<string, string>
+    headers: response.headers || {}
   };
 }
 

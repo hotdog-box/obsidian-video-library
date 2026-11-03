@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.1 — 2026-11-04
+
+- Security: stop disabling TLS certificate verification in the local stream proxy; all HTTPS upstream requests now validate certificates.
+- Use a dedicated `Component` for Markdown rendering in the notes panel instead of the long-lived plugin instance, avoiding component lifecycle leaks.
+- Respect the user's file deletion preference by using `FileManager.trashFile()` instead of `Vault.delete()`.
+- Use `Vault.configDir` for the fallback plugin/config path instead of hardcoding `.obsidian`.
+- Remove unnecessary TypeScript assertions and unused helpers; clean up lint warnings in the notes and floating-notes views.
+- Add an English introduction at the top of the README for the Obsidian community directory review.
+
 ## 0.9.0 — 2026-11-04
 
 - Add a resizable video player modal, with a notes panel that opens on the right.

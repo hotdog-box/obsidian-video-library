@@ -1,4 +1,4 @@
-import { ItemView, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, setIcon, type ViewStateResult, WorkspaceLeaf } from "obsidian";
 import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { NoteNode, VideoItem } from "../types";
@@ -32,7 +32,7 @@ export class NotesFloatingView extends ItemView implements NotesPlayerHost {
     return { videoId: this.videoId };
   }
 
-  async setState(state: Record<string, unknown>, result: any): Promise<void> {
+  async setState(state: Record<string, unknown>, result: ViewStateResult): Promise<void> {
     this.videoId = String(state?.videoId || this.videoId || "");
     await super.setState(state, result);
     this.render();

@@ -6,7 +6,7 @@ import { uid } from "./types";
 
 const NOTE_MARKER = /^<!--\s*vl-note:\s*(.*?)\s*-->\s*$/;
 const SECTION_MARKER = /^<!--\s*vl-section:\s*(.*?)\s*-->\s*$/;
-const NOTE_HEADER = /^#{2,3}\s+(\d{1,2}:\d{2}(?::\d{2})?)(?:\s*[·\-]\s*(.*))?$/;
+const NOTE_HEADER = /^#{2,3}\s+(\d{1,2}:\d{2}(?::\d{2})?)(?:\s*[-·]\s*(.*))?$/;
 
 function formatClock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -16,14 +16,6 @@ function formatClock(seconds: number): string {
   const rest = total % 60;
   if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
   return `${minutes}:${String(rest).padStart(2, "0")}`;
-}
-
-function parseClock(value: string): number {
-  const parts = value.split(":").map((part) => Number(part));
-  if (parts.some((part) => !Number.isFinite(part))) return 0;
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  return 0;
 }
 
 function sanitizeName(raw: string, fallback = "未命名"): string {
@@ -106,13 +98,6 @@ function removeImageFromSummary(summary: string, path: string): string {
     )
     .join("\n")
     .trim();
-}
-
-function paragraphs(text: string): string[] {
-  return text
-    .split(/\n\s*\n/g)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
 }
 
 function isSystemLine(line: string): boolean {
@@ -337,7 +322,6 @@ export class NoteStore {
       while (headingIndex >= 0 && lines[headingIndex].trim() === "") headingIndex -= 1;
       const heading = headingIndex >= 0 ? lines[headingIndex].match(NOTE_HEADER) : null;
       const comment = heading?.[2]?.trim() || "";
-      const start = heading ? headingIndex : index;
       let end = lines.length;
       for (let next = index + 1; next < lines.length; next += 1) {
         if (lines[next].match(NOTE_MARKER) || /^#{2,3}\s+/.test(lines[next])) {
@@ -732,7 +716,7 @@ export class NoteStore {
         const file = this.noteFileFor(group);
         if (file) {
           try {
-            await this.app.vault.delete(file, true);
+            await this.app.fileManager.trashFile(file);
           } catch {
             // Ignore.
           }
@@ -749,12 +733,16 @@ export class NoteStore {
     return true;
   }
 
+  private get pluginDir(): string {
+    return this.plugin.manifest.dir || normalizePath(`${this.app.vault.configDir}/plugins/video-library`);
+  }
+
   private get trashDir(): string {
-    return normalizePath(`${this.plugin.manifest.dir || ".obsidian/plugins/video-library"}/notes-trash/images`);
+    return normalizePath(`${this.pluginDir}/notes-trash/images`);
   }
 
   private get trashGroupDir(): string {
-    return normalizePath(`${this.plugin.manifest.dir || ".obsidian/plugins/video-library"}/notes-trash/groups`);
+    return normalizePath(`${this.pluginDir}/notes-trash/groups`);
   }
 
   async trashGroup(video: VideoItem): Promise<boolean> {

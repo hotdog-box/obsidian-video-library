@@ -6,7 +6,7 @@ description: "Use when modifying the Obsidian Video Library plugin (plugin id vi
 # Obsidian Video Library — AI 技术交接报告
 
 > 交接对象：任何要修改本项目的 AI 编码代理。
-> 项目版本：`0.9.0`（截至本报告）。
+> 项目版本：`0.9.1`（截至本报告）。
 > 源码入口：`src/main.ts`。
 > 配套人读文档：`项目架构与修改指南.md`。
 
@@ -21,7 +21,7 @@ description: "Use when modifying the Obsidian Video Library plugin (plugin id vi
 测试库：  G:\AIdeepseek ha\视频文件管理插件\视频文件插件管理插件
 主库：    I:\各种老师
 插件 ID： video-library
-版本：    0.9.0
+版本：    0.9.1
 Obsidian：1.15.0（Windows 桌面版）
 ```
 
@@ -32,7 +32,7 @@ https://github.com/hotdog-box/obsidian-video-library
 branch: main
 latest feature commit: 20fbdc5 fix: preserve tag search and include folder videos
 docs commit: see latest `git log` (documentation is updated after the feature commit)
-release: https://github.com/hotdog-box/obsidian-video-library/releases/tag/0.9.0
+release: https://github.com/hotdog-box/obsidian-video-library/releases/tag/0.9.1
 ```
 
 当前主库状态：
@@ -538,7 +538,7 @@ npm run dev        # watch
 
 ---
 
-## 10.5 0.9.0 笔记 / B 站 / 网盘 / 更新
+## 10.5 0.9.1 笔记 / B 站 / 网盘 / 更新
 
 ### 新文件
 
@@ -657,7 +657,7 @@ npm run dev        # watch
 - 清单：`manifest.json`
 - 本地站点模板：`刮削站点导入代码/刮削站点模板.json`（不提交）
 
-### 10.6 0.9.0 补充约束
+### 10.6 0.9.1 补充约束
 
 - 全屏笔记栏在 `.vl-player-stage:fullscreen` 下显示；不要把它移到 modal 外层。
 - 悬浮笔记是 Obsidian popout `NotesFloatingView`；打开 Modal 前务必 `focusMainWindow()`，否则会进到悬浮窗。

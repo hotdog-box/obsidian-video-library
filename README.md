@@ -33,6 +33,16 @@ See the Chinese sections below for the complete feature list and usage notes.
 > 当前版本：`0.9.0`
 > 已在 Obsidian `1.15.0`（Windows 桌面版）实际测试通过。
 > 插件类型：仅桌面端。
+> 最新提交：`20fbdc5`（`main`）。
+
+### 交接状态
+
+- 源码与开发说明：[项目架构与修改指南.md](项目架构与修改指南.md)、[AI技术交接报告.skill.md](AI技术交接报告.skill.md)
+- 构建：`npm install && npm run build`
+- 测试：`npm test`（当前 9/9）
+- 当前仍需手填网盘直链；百度/夸克文件列表 API 尚未接入。
+- B 站多 P 已支持选集；番剧 ep 列表选集尚未接入。
+- B 站/网盘支持在线悬停预览；YouTube/Vimeo iframe 暂不支持。
 
 ---
 
@@ -93,7 +103,7 @@ See the Chinese sections below for the complete feature list and usage notes.
   - B 站和网盘视频支持在线悬停预览
   - B 站多 P 视频支持播放器选集，导入带 `?p=` 的网址会保留分 P
   - 笔记节点可以单独收起，卡片拖动后的顺序会保存
-  - 点击视频标签会跨全部文件夹筛选，不再只停留在当前文件夹
+  - 点击视频标签会保留当前搜索词和多标签选择，并把所有文件夹中的匹配视频直接显示在全部视频区域
 - **更新**
   - 启动后自动检查 GitHub 最新 Release，也可在设置里手动检查
   - 发现新版本时可一键下载并重载

@@ -12,6 +12,99 @@ description: "Use when modifying the Obsidian Video Library plugin (plugin id vi
 
 ---
 
+## 0. 交接快照（2026-11-04，明天继续用）
+
+### 0.1 环境与路径
+
+```text
+源码仓库：G:\AIdeepseek ha\视频文件管理插件\video-library-plugin
+测试库：  G:\AIdeepseek ha\视频文件管理插件\视频文件插件管理插件
+主库：    I:\各种老师
+插件 ID： video-library
+版本：    0.9.0
+Obsidian：1.15.0（Windows 桌面版）
+```
+
+GitHub：
+
+```text
+https://github.com/hotdog-box/obsidian-video-library
+branch: main
+latest commit: 20fbdc5 fix: preserve tag search and include folder videos
+```
+
+当前主库状态：
+
+- 视频约 381 个。
+- B 站账号已登录：`向往颜料的盒子`。
+- 百度网盘已连接：`自学建筑专用`。
+- 主库笔记组保留 `YYDS【电报搜@CosPlayYYDS】 (1)`，不要清理。
+- `data.json`、`covers/`、`external-links/`、`screenshots/` 都是本地数据，不要提交。
+
+### 0.2 最近完成的功能
+
+- 播放器：B 站清晰度、0.5×–2× 倍速、空格/方向键控制、拖动、最大化、滚动、底部固定栏。
+- 笔记：自动截图封面、Markdown 总结、内联多图、多图删除/回收、节点收起、总结折叠、节点树。
+- 分组：独立分组（`NoteSection`），分组标题/总结，卡片拖入/拖出，MD 中 `##` 分组、`###` 卡片。
+- 整篇笔记：整个视频笔记文件夹移入回收站，可整篇还原/彻底删除。
+- 预览：笔记节点生成 2 秒片段，悬停总时长默认 10 秒；B 站/网盘支持在线悬停预览。
+- B 站多 P：`VideoItem.page`、播放器选集、导入 `?p=` 保留。
+- 回收站：按视频分组、搜索、多选删除、截图原时间。
+- 标签：保留原有搜索逻辑；标签筛选会带上所有文件夹中的匹配视频，并在全部视频区域直接显示。
+- 侧边栏“视频笔记管理”、卡片“打开笔记”、关闭笔记后刷新管理页。
+- 百度登录验证修复：`xpan/nas?method=uinfo`。
+
+### 0.3 明天接着改时先做
+
+```powershell
+cd 'G:\AIdeepseek ha\视频文件管理插件\video-library-plugin'
+npm install
+npm run build
+npm test
+```
+
+部署到测试库：
+
+```powershell
+# 只在 build.mjs 未自动部署时手动复制
+Copy-Item .\main.js 'G:\AIdeepseek ha\视频文件管理插件\视频文件插件管理插件\.obsidian\plugins\video-library\main.js' -Force
+Copy-Item .\styles.css 'G:\AIdeepseek ha\视频文件管理插件\视频文件插件管理插件\.obsidian\plugins\video-library\styles.css' -Force
+```
+
+在 Obsidian 开发者控制台或命令面板重载插件。需要 CDP 调试时，用 `promo/cdp.mjs` 连接 `127.0.0.1:9222`。
+
+### 0.4 已知未完成 / 不要误判
+
+1. **百度网盘、夸克网盘的“浏览文件/多选/文件夹自动填直链”还没做。**
+   - 当前仍需要手填直链。
+   - 百度 Cookie 登录已通，但文件列表还需要 `bdstoken`/接口权限。
+   - 夸克文件列表 API 还没接。
+2. **B 站番剧的 ep 列表选集还没做。**
+   - 多 P（`?p=`）选集已做；番剧按单集 `epId` 播放。
+3. **YouTube / Vimeo 的 iframe 悬停预览还没做。**
+   - B 站和网盘 `<video>` 预览已做；iframe 不能直接截帧。
+4. **整篇笔记回收依赖“每个视频一个文件夹”模式。**
+   - `notesGrouping = flat` 时暂不支持整篇文件夹移动。
+5. **不要用“删除笔记文件夹”来清测试数据。**
+   - 之前测试清理曾误删过笔记 MD；清理前先备份或先确认目录。
+
+### 0.5 最小验证
+
+```text
+npm run build   ✅
+npm test        ✅ 9/9
+```
+
+重点手测：
+
+- B 站视频：清晰度、倍速、选集、卡片悬停预览。
+- 笔记：标记截图、总结内图片、节点收起、拖动排序。
+- 分组：新建/改名/删除、拖入/拖出、MD `##`/`###`。
+- 回收站：整篇笔记还原/彻底删除、截图多选删除。
+- 标签：在文件夹内点标签，结果应进入全部视频并包含文件夹内匹配视频。
+
+---
+
 ## 1. 30 秒理解项目
 
 这是一个 **Obsidian 桌面版插件**，不是独立应用。
@@ -53,7 +146,9 @@ description: "Use when modifying the Obsidian Video Library plugin (plugin id vi
 | 7 | `src/ui/settings-tab.ts` | 看设置页和站点管理 |
 | 8 | `src/scraping.ts` + `src/ui/scrape-modal.ts` | 看刮削 |
 | 9 | `src/covers.ts` / `src/metadata.ts` / `src/providers.ts` | 看外部能力 |
-| 10 | `src/styles.css` | 看样式约定 |
+| 10 | `src/notes.ts` + `src/ui/notes-panel.ts` | 看笔记格式、截图、分组、整篇回收 |
+| 11 | `src/ui/notes-view.ts` / `notes-trash-modal.ts` / `note-sections-modal.ts` / `notes-floating-view.ts` | 看笔记管理、回收站、分组弹窗、悬浮笔记 |
+| 12 | `src/styles.css` | 看样式约定 |
 
 不要一开始通读 `library-view.ts`（2600+ 行）。先看 `refresh()`、`render()`、`filteredVideos()`、`renderGrid()` 四个入口。
 
@@ -157,9 +252,28 @@ metadataSource, scrapedAt,
 categoryId, folderId, tags: string[], notes,
 coverPath, thumbnailUrl,
 localPath, localExternal, localLinkPath,
-duration, preview, favorite, pinned, pinnedAt,
+duration, preview, previewFromNotes, favorite, pinned, pinnedAt,
+page, epId, noteSections,
 sortOrder, lastPlayedAt, createdAt, updatedAt
 ```
+
+笔记相关：
+
+```ts
+NoteNode {
+  id, time, comment, summary, tags,
+  coverImage?, imagePath?, images?,
+  groupId?, parentId?, createdAt
+}
+
+NoteSection { id, title, summary, createdAt }
+
+TrashNote   { id, videoId, videoTitle, block, deletedAt }
+TrashImage  { id, videoId, nodeId, time?, kind?, path, trashPath, deletedAt }
+TrashGroup  { id, videoId, groupId, title, notePath, folderPath, trashPath, deletedAt }
+```
+
+`NoteNode.summary` 里可以直接保存 `![[...]]` 图片，由 MarkdownRenderer 内联渲染；自动截图单独放 `coverImage`，不要塞进 summary。
 
 `Marker`：
 
@@ -187,7 +301,11 @@ sortOrder, lastPlayedAt, createdAt, updatedAt
 <vault>/.obsidian/plugins/video-library/
   ├─ data.json
   ├─ covers/
-  └─ external-links/
+  ├─ external-links/
+  └─ notes-trash/
+       ├─ notes/
+       ├─ images/
+       └─ groups/
 ```
 
 ---
@@ -207,7 +325,13 @@ sortOrder, lastPlayedAt, createdAt, updatedAt
 | 改站点列表/导入导出 | `settings-tab.ts` + `main.ts` (`importScrapeSites`) | 文件选择器必须同 document |
 | 改标记/站点表单 | `marker-modal.ts` | 站点能力只有 有码/无码 |
 | 改封面/截帧 | `covers.ts` + `video-modal.ts` / `frame-modal.ts` | |
-| 改 URL 识别/新平台 | `providers.ts` + `metadata.ts` + `types.ts` + `player-modal.ts` | |
+| 改笔记格式/截图/分组/回收站 | `notes.ts` + `types.ts` | 不要改 `vl-note` / `vl-section` marker 格式 |
+| 改笔记面板/节点树/折叠/拖动 | `notes-panel.ts` | 卡片顺序来自文件顺序，树才按时间排序 |
+| 改笔记管理/整篇回收 | `notes-view.ts` + `notes-trash-modal.ts` | 整篇删除调用 `trashGroup` |
+| 改分组管理弹窗 | `note-sections-modal.ts` | `addSection/updateSection/deleteSection` |
+| 改悬浮笔记 | `notes-floating-view.ts` + `main.ts` | popout 打开 Modal 前要 `focusMainWindow()` |
+| 改悬停预览 | `hover-preview.ts` + `library-view.ts` + `main.ts` | B 站通过 `getPreviewSource()` 解析本地代理流 |
+| 改 URL 识别/新平台 | `providers.ts` + `metadata.ts` + `types.ts` + `player-modal.ts` | B 站 `page` 用于多 P 选集 |
 | 改样式/动画 | `src/styles.css` | 构建后复制到根目录 |
 | 改构建/部署 | `build.mjs` + `deploy.config.json` | |
 | 改文档 | `README.md` / `CHANGELOG.md` / 本报告 / 人读指南 | |

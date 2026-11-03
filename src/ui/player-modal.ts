@@ -1,5 +1,5 @@
 import { App, Modal, Notice, setIcon } from "obsidian";
-import { resolveBilibiliStream } from "../bilibili";
+import { resolveBilibiliStream, type BilibiliQuality } from "../bilibili";
 import { formatDuration, providerName, t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import { buildEmbedUrl, parseVideoUrl } from "../providers";
@@ -61,6 +61,11 @@ export class VideoPlayerModal extends Modal {
   private noteMarkersEl: HTMLElement | null = null;
   private noteNodes: NoteNode[] = [];
   private audioEl: HTMLAudioElement | null = null;
+  private qualities: BilibiliQuality[] = [];
+  private qualitySelect: HTMLSelectElement | null = null;
+  private speedSelect: HTMLSelectElement | null = null;
+  private currentQualityId = 0;
+  private qualityBadge: HTMLElement | null = null;
   private startTime = 0;
   private startApplied = false;
 
@@ -84,6 +89,7 @@ export class VideoPlayerModal extends Modal {
     this.titleEl.setText(this.item.title || t("misc.untitled"));
     this.render();
     this.addResizeHandle();
+    this.addDragHandle();
     this.keyHandler = (event: KeyboardEvent) => this.onShortcut(event);
     document.addEventListener("keydown", this.keyHandler, true);
     if (this.startTime > 0) {
@@ -129,6 +135,34 @@ export class VideoPlayerModal extends Modal {
       this.plugin.data.settings.noteSummaryShortcut || "Alt+G"
     );
     if (inField && !markMatch && !summaryMatch) return;
+
+    if (!inField && this.videoEl && !markMatch && !summaryMatch) {
+      const video = this.videoEl;
+      if (event.code === "Space" || event.key === " ") {
+        event.preventDefault();
+        this.togglePlay();
+        return;
+      }
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const delta = event.key === "ArrowRight" ? 5 : -5;
+        const duration = this.effectiveDuration(video);
+        video.currentTime = Math.max(0, Math.min(duration, video.currentTime + delta));
+        this.syncAudio(true);
+        return;
+      }
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        const target = this.audioEl || video;
+        const delta = event.key === "ArrowUp" ? 0.1 : -0.1;
+        target.volume = Math.max(0, Math.min(1, target.volume + delta));
+        target.muted = target.volume <= 0;
+        if (this.audioEl) video.muted = true;
+        this.updateVolumeUi();
+        return;
+      }
+    }
+
     if (markMatch) {
       event.preventDefault();
       event.stopPropagation();
@@ -172,6 +206,42 @@ export class VideoPlayerModal extends Modal {
       event.shiftKey === needsShift &&
       event.metaKey === needsMeta
     );
+  }
+
+  private addDragHandle(): void {
+    const header = this.modalEl.querySelector<HTMLElement>(".modal-header");
+    if (!header) return;
+    header.addClass("vl-player-drag-handle");
+    header.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("button, input, select, textarea, a")) return;
+      event.preventDefault();
+      const rect = this.modalEl.getBoundingClientRect();
+      this.modalEl.setCssStyles({
+        position: "fixed",
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+        margin: "0",
+        zIndex: "1000"
+      });
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const move = (next: PointerEvent): void => {
+        this.modalEl.setCssStyles({
+          left: `${Math.max(0, rect.left + next.clientX - startX)}px`,
+          top: `${Math.max(0, rect.top + next.clientY - startY)}px`
+        });
+      };
+      const stop = (): void => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", stop);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", stop, { once: true });
+    });
   }
 
   private addResizeHandle(): void {
@@ -218,6 +288,45 @@ export class VideoPlayerModal extends Modal {
     this.renderDetails();
 
     const footer = main.createDiv({ cls: "vl-modal-buttons vl-player-footer" });
+    const maximize = footer.createEl("button", {
+      cls: "vl-player-maximize",
+      attr: { type: "button", title: t("player.maximize"), "aria-label": t("player.maximize") }
+    });
+    setIcon(maximize, "maximize-2");
+    maximize.addEventListener("click", () => {
+      const next = !this.modalEl.hasClass("is-maximized");
+      this.modalEl.toggleClass("is-maximized", next);
+      if (next) {
+        this.modalEl.setCssStyles({
+          position: "fixed",
+          left: "0",
+          top: "0",
+          width: "100vw",
+          height: "100vh",
+          maxWidth: "100vw",
+          maxHeight: "100vh",
+          margin: "0",
+          borderRadius: "0",
+          zIndex: "1000"
+        });
+      } else {
+        this.modalEl.setCssStyles({
+          position: "",
+          left: "",
+          top: "",
+          width: "",
+          height: "",
+          maxWidth: "",
+          maxHeight: "",
+          margin: "",
+          borderRadius: "",
+          zIndex: ""
+        });
+      }
+      setIcon(maximize, next ? "minimize-2" : "maximize-2");
+      maximize.setAttribute("title", next ? t("player.restore") : t("player.maximize"));
+    });
+
     const notes = footer.createEl("button", {
       cls: "vl-player-notes-toggle",
       attr: { type: "button" }
@@ -743,10 +852,15 @@ export class VideoPlayerModal extends Modal {
         return;
       }
       loading.remove();
+      this.qualities = info.qualities || [];
+      this.currentQualityId = this.qualities[0]?.id || 0;
       this.setupNativePlayer(container, info.videoUrl, info.audioUrl, true);
       if (info.quality) {
-        const badge = container.createDiv({ cls: "vl-player-quality-badge", text: info.quality });
-        badge.setAttribute("title", t("player.bilibiliQuality"));
+        this.qualityBadge = container.createDiv({
+          cls: "vl-player-quality-badge",
+          text: info.quality
+        });
+        this.qualityBadge.setAttribute("title", t("player.bilibiliQuality"));
       }
     } catch (error) {
       console.warn("video-library: Bilibili native playback failed", error);
@@ -782,6 +896,42 @@ export class VideoPlayerModal extends Modal {
 
     this.buildControls(container, this.videoEl);
     this.wireVideo(this.videoEl);
+  }
+
+  private async switchQuality(id: number): Promise<void> {
+    const quality = this.qualities.find((item) => item.id === id);
+    const video = this.videoEl;
+    if (!quality || !video) return;
+    const time = video.currentTime;
+    const playing = !video.paused;
+    const volume = this.audioEl?.volume ?? video.volume;
+    this.currentQualityId = id;
+    video.src = quality.videoUrl;
+    if (this.audioEl) {
+      this.audioEl.src = quality.audioUrl || "";
+      this.audioEl.volume = volume;
+      this.audioEl.load();
+    }
+    video.load();
+    await new Promise<void>((resolve) => {
+      const done = (): void => {
+        video.removeEventListener("loadedmetadata", done);
+        resolve();
+      };
+      video.addEventListener("loadedmetadata", done, { once: true });
+      window.setTimeout(done, 3000);
+    });
+    try {
+      video.currentTime = Math.min(time, Math.max(0, (video.duration || time) - 0.2));
+      if (this.audioEl) this.audioEl.currentTime = video.currentTime;
+    } catch {
+      // Ignore seek failures.
+    }
+    if (playing) {
+      void video.play().catch(() => undefined);
+      if (this.audioEl) void this.audioEl.play().catch(() => undefined);
+    }
+    if (this.qualityBadge) this.qualityBadge.setText(quality.label);
   }
 
   private wireVideo(video: HTMLVideoElement): void {
@@ -840,6 +990,40 @@ export class VideoPlayerModal extends Modal {
     this.buildScrubPreview(container, video);
 
     this.totalLabel = bar.createSpan({ cls: "vl-player-time", text: "--:--" });
+
+    if (this.qualities.length > 1) {
+      this.qualitySelect = bar.createEl("select", {
+        cls: "vl-player-quality-select",
+        attr: { "aria-label": t("player.quality") }
+      });
+      for (const quality of this.qualities) {
+        this.qualitySelect.createEl("option", {
+          value: String(quality.id),
+          text: quality.label
+        });
+      }
+      this.qualitySelect.value = String(this.currentQualityId);
+      this.qualitySelect.addEventListener("change", () => {
+        void this.switchQuality(Number(this.qualitySelect?.value));
+      });
+    }
+
+    this.speedSelect = bar.createEl("select", {
+      cls: "vl-player-speed-select",
+      attr: { "aria-label": t("player.speed") }
+    });
+    for (const speed of [0.5, 0.75, 1, 1.5, 2]) {
+      this.speedSelect.createEl("option", {
+        value: String(speed),
+        text: speed === 1 ? "1.0×" : `${speed}×`
+      });
+    }
+    this.speedSelect.value = "1";
+    this.speedSelect.addEventListener("change", () => {
+      const speed = Number(this.speedSelect?.value) || 1;
+      if (this.videoEl) this.videoEl.playbackRate = speed;
+      if (this.audioEl) this.audioEl.playbackRate = speed;
+    });
 
     this.muteButton = bar.createEl("button", {
       cls: "vl-player-control",
@@ -1287,6 +1471,7 @@ export class VideoPlayerModal extends Modal {
       this.notesPanel = null;
       this.notesHost?.empty();
       this.modalEl.removeClass("has-notes");
+      this.plugin.refreshNotesManager();
       return;
     }
     if (this.notesPanel) return;
@@ -1330,6 +1515,10 @@ export class VideoPlayerModal extends Modal {
     this.renderNoteMarkers();
   }
 
+  refreshNotes(): void {
+    void this.notesPanel?.reload();
+  }
+
   private renderNoteMarkers(): void {
     const container = this.noteMarkersEl;
     const duration = this.duration;
@@ -1357,6 +1546,7 @@ export class VideoPlayerModal extends Modal {
 
   onClose(): void {
     if (this.plugin.activePlayer === this) this.plugin.activePlayer = null;
+    this.plugin.refreshNotesManager();
     if (this.keyHandler) {
       document.removeEventListener("keydown", this.keyHandler, true);
       this.keyHandler = null;

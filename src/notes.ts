@@ -5,7 +5,7 @@ import type { NoteGroup, NoteNode, TrashImage, TrashNote, VideoItem } from "./ty
 import { uid } from "./types";
 
 const NOTE_MARKER = /^<!--\s*vl-note:\s*(.*?)\s*-->\s*$/;
-const NOTE_HEADER = /^##\s+(\d{1,2}:\d{2}(?::\d{2})?)(?:\s*[·\-]\s*(.*))?$/;
+const NOTE_HEADER = /^#{2,3}\s+(\d{1,2}:\d{2}(?::\d{2})?)(?:\s*[·\-]\s*(.*))?$/;
 
 function formatClock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -67,22 +67,25 @@ function protocolLink(videoId: string, time: number): string {
 }
 
 function blockFor(video: VideoItem, node: NoteNode): string {
+  const images = node.images?.length ? node.images : node.imagePath ? [node.imagePath] : [];
   const meta = JSON.stringify({
     id: node.id,
     time: node.time,
     tags: node.tags,
-    image: node.imagePath,
+    images,
+    image: images[0],
+    parentId: node.parentId,
     createdAt: node.createdAt
   });
-  const heading = `## ${formatClock(node.time)}${node.comment ? ` · ${node.comment}` : ""}`;
+  const heading = `${node.parentId ? "###" : "##"} ${formatClock(node.time)}${node.comment ? ` · ${node.comment}` : ""}`;
   const parts = [
     heading,
     `<!-- vl-note: ${meta} -->`,
     "",
     protocolLink(video.id, node.time),
     "",
-    node.imagePath ? `![[${node.imagePath}]]` : "",
-    "",
+    ...images.map((path) => `![[${path}]]`),
+    ...(images.length ? [""] : []),
     node.summary,
     "",
     "---",
@@ -233,6 +236,7 @@ export class NoteStore {
       folder
     );
     const notePath = normalizePath(`${folder}/${noteName}`);
+    this.plugin.noteWriteGuard = Date.now() + 900;
     await this.app.vault.create(notePath, frontmatterFor(video));
     const group: NoteGroup = {
       id: uid("notegroup"),
@@ -297,7 +301,15 @@ export class NoteStore {
     for (let index = 0; index < lines.length; index += 1) {
       const match = lines[index].match(NOTE_MARKER);
       if (!match) continue;
-      let data: { id?: string; time?: number; tags?: string[]; image?: string; createdAt?: number };
+      let data: {
+        id?: string;
+        time?: number;
+        tags?: string[];
+        image?: string;
+        images?: string[];
+        parentId?: string;
+        createdAt?: number;
+      };
       try {
         data = JSON.parse(match[1]) as typeof data;
       } catch {
@@ -312,23 +324,27 @@ export class NoteStore {
       const start = heading ? headingIndex : index;
       let end = lines.length;
       for (let next = index + 1; next < lines.length; next += 1) {
-        if (lines[next].match(NOTE_MARKER) || /^##\s+/.test(lines[next])) {
+        if (lines[next].match(NOTE_MARKER) || /^#{2,3}\s+/.test(lines[next])) {
           end = next;
           break;
         }
       }
       const bodyLines = lines.slice(index + 1, end);
       const body: string[] = [];
-      let imagePath = data.image;
+      const images: string[] = Array.isArray(data.images)
+        ? data.images.map((path) => String(path)).filter(Boolean)
+        : data.image
+          ? [String(data.image)]
+          : [];
       for (const line of bodyLines) {
         const imageMatch = line.trim().match(/^!\[\[(.*?)\]\]$/);
         if (imageMatch) {
-          if (!imagePath) imagePath = imageMatch[1];
+          if (!images.includes(imageMatch[1])) images.push(imageMatch[1]);
           continue;
         }
         const markdownImage = line.trim().match(/^!\[.*\]\((.*?)\)$/);
         if (markdownImage) {
-          if (!imagePath) imagePath = markdownImage[1];
+          if (!images.includes(markdownImage[1])) images.push(markdownImage[1]);
           continue;
         }
         if (!isSystemLine(line)) body.push(line);
@@ -340,7 +356,9 @@ export class NoteStore {
         comment,
         summary,
         tags: Array.isArray(data.tags) ? data.tags.map((tag) => String(tag)).filter(Boolean) : [],
-        imagePath,
+        images,
+        imagePath: images[0],
+        parentId: data.parentId ? String(data.parentId) : undefined,
         createdAt: Number(data.createdAt) || Date.now()
       });
     }
@@ -355,6 +373,7 @@ export class NoteStore {
   }
 
   private async writeGroup(group: NoteGroup, text: string): Promise<void> {
+    this.plugin.noteWriteGuard = Date.now() + 900;
     const file = this.noteFileFor(group);
     if (file) await this.app.vault.adapter.write(file.path, text);
     else await this.app.vault.create(group.notePath, text);
@@ -377,6 +396,7 @@ export class NoteStore {
       comment: options.comment?.trim() || "",
       summary: options.summary?.trim() || "",
       tags: options.tags?.map((tag) => tag.trim()).filter(Boolean) || [],
+      images: imagePath ? [imagePath] : [],
       imagePath,
       createdAt: Date.now()
     };
@@ -406,7 +426,7 @@ export class NoteStore {
     if (start < 0 || !NOTE_HEADER.test(lines[start])) start = markerIndex;
     let end = lines.length;
     for (let next = markerIndex + 1; next < lines.length; next += 1) {
-      if (lines[next].match(NOTE_MARKER) || /^##\s+/.test(lines[next])) {
+      if (lines[next].match(NOTE_MARKER) || /^#{2,3}\s+/.test(lines[next])) {
         end = next;
         break;
       }
@@ -437,7 +457,7 @@ export class NoteStore {
     if (start < 0 || !NOTE_HEADER.test(lines[start])) start = markerIndex;
     let end = lines.length;
     for (let next = markerIndex + 1; next < lines.length; next += 1) {
-      if (lines[next].match(NOTE_MARKER) || /^##\s+/.test(lines[next])) {
+      if (lines[next].match(NOTE_MARKER) || /^#{2,3}\s+/.test(lines[next])) {
         end = next;
         break;
       }
@@ -524,10 +544,10 @@ export class NoteStore {
     return normalizePath(`${this.plugin.manifest.dir || ".obsidian/plugins/video-library"}/notes-trash/images`);
   }
 
-  async trashImage(video: VideoItem, node: NoteNode): Promise<boolean> {
-    if (!node.imagePath) return false;
+  async trashImage(video: VideoItem, node: NoteNode, imagePath?: string): Promise<boolean> {
+    const source = imagePath || node.imagePath;
+    if (!source) return false;
     const group = await this.resolveGroup(video);
-    const source = node.imagePath;
     const extension = source.split(".").pop()?.toLowerCase() || "png";
     const id = uid("trashimg");
     const trashPath = normalizePath(`${this.trashDir}/${id}.${extension}`);
@@ -544,6 +564,7 @@ export class NoteStore {
       videoId: video.id,
       videoTitle: video.title,
       nodeId: node.id,
+      time: node.time,
       path: source,
       trashPath,
       notePath: group.notePath,
@@ -551,7 +572,14 @@ export class NoteStore {
       deletedAt: Date.now()
     };
     this.plugin.data.trashImages.unshift(record);
-    await this.updateNode(video, { ...node, imagePath: undefined });
+    const images = (node.images?.length ? node.images : node.imagePath ? [node.imagePath] : []).filter(
+      (path) => path !== source
+    );
+    await this.updateNode(video, {
+      ...node,
+      images,
+      imagePath: images[0]
+    });
     await this.plugin.persist();
     return true;
   }
@@ -571,7 +599,11 @@ export class NoteStore {
     }
     const nodes = await this.listNodes(video);
     const node = nodes.find((item) => item.id === record.nodeId);
-    if (node) await this.updateNode(video, { ...node, imagePath: record.path });
+    if (node) {
+      const images = [...(node.images?.length ? node.images : node.imagePath ? [node.imagePath] : [])];
+      if (!images.includes(record.path)) images.push(record.path);
+      await this.updateNode(video, { ...node, images, imagePath: images[0] });
+    }
     this.plugin.data.trashImages = this.plugin.data.trashImages.filter((item) => item.id !== id);
     try {
       await this.app.vault.adapter.remove(record.trashPath);
@@ -609,6 +641,52 @@ export class NoteStore {
     } catch {
       // Ignore an already missing trash folder.
     }
+  }
+
+  async reorderNodes(video: VideoItem, orderedIds: string[]): Promise<void> {
+    const group = await this.resolveGroup(video);
+    const text = await this.readText(group);
+    const lines = text.split(/\r?\n/);
+    const blocks: Array<{ id: string; lines: string[] }> = [];
+    let headerEnd = lines.length;
+    for (let index = 0; index < lines.length; index += 1) {
+      const marker = lines[index].match(NOTE_MARKER);
+      if (!marker) continue;
+      let data: { id?: string };
+      try {
+        data = JSON.parse(marker[1]) as { id?: string };
+      } catch {
+        continue;
+      }
+      let start = index - 1;
+      while (start >= 0 && lines[start].trim() === "") start -= 1;
+      if (start < 0 || !NOTE_HEADER.test(lines[start])) start = index;
+      let end = lines.length;
+      for (let next = index + 1; next < lines.length; next += 1) {
+        if (lines[next].match(NOTE_MARKER) || /^#{2,3}\s+/.test(lines[next])) {
+          end = next;
+          break;
+        }
+      }
+      if (blocks.length === 0) headerEnd = start;
+      blocks.push({ id: String(data.id || ""), lines: lines.slice(start, end) });
+    }
+    if (blocks.length === 0) return;
+    const map = new Map(blocks.map((block) => [block.id, block]));
+    const ordered = orderedIds.map((id) => map.get(id)).filter((block): block is { id: string; lines: string[] } => Boolean(block));
+    for (const block of blocks) if (!ordered.includes(block)) ordered.push(block);
+    const header = lines.slice(0, headerEnd).join("\n").trimEnd();
+    const body = ordered.map((block) => block.lines.join("\n").trim()).join("\n\n");
+    await this.writeGroup(group, `${header}\n\n${body}\n`);
+    await this.plugin.persist();
+  }
+
+  async setNodeImages(video: VideoItem, node: NoteNode, images: string[]): Promise<void> {
+    await this.updateNode(video, {
+      ...node,
+      images,
+      imagePath: images[0]
+    });
   }
 
   imagePathsInBlock(block: string): string[] {
@@ -738,3 +816,4 @@ export class NoteStore {
     }
   }
 }
+

@@ -24,6 +24,7 @@ interface TrashGroup {
 export class TrashNotesModal extends Modal {
   private search = "";
   private expanded = new Set<string>();
+  private selected = new Set<string>();
 
   constructor(
     app: App,
@@ -60,6 +61,17 @@ export class TrashNotesModal extends Modal {
       next?.focus();
       next?.setSelectionRange(next.value.length, next.value.length);
     });
+    if (this.selected.size > 0) {
+      const removeSelected = toolbar.createEl("button", {
+        cls: "vl-notes-manager-action is-small is-danger",
+        attr: { type: "button" }
+      });
+      setIcon(removeSelected.createSpan({ cls: "vl-btn-icon" }), "trash-2");
+      removeSelected.createSpan({
+        text: t("notes.deleteSelected", { count: this.selected.size })
+      });
+      removeSelected.addEventListener("click", () => this.confirmDeleteSelected());
+    }
     const clear = toolbar.createEl("button", {
       cls: "vl-notes-manager-action is-small is-danger",
       attr: { type: "button" }
@@ -133,6 +145,7 @@ export class TrashNotesModal extends Modal {
 
   private renderNote(parent: HTMLElement, item: TrashNote): void {
     const row = parent.createDiv({ cls: "vl-notes-trash-row" });
+    this.selectionBox(row, item.id);
     const info = row.createDiv({ cls: "vl-notes-trash-info" });
     info.createDiv({
       cls: "vl-notes-trash-title",
@@ -175,12 +188,19 @@ export class TrashNotesModal extends Modal {
 
   private renderImage(parent: HTMLElement, item: TrashImage): void {
     const row = parent.createDiv({ cls: "vl-notes-trash-row" });
+    this.selectionBox(row, item.id);
     const thumb = row.createDiv({ cls: "vl-notes-trash-thumb" });
     const img = thumb.createEl("img", { attr: { alt: "", loading: "lazy" } });
     const url = this.plugin.noteStore.displayPath(item.trashPath);
     if (url) img.src = url;
     const info = row.createDiv({ cls: "vl-notes-trash-info" });
-    info.createDiv({ cls: "vl-notes-trash-title", text: t("notes.trashImageTitle", { title: item.videoTitle }) });
+    info.createDiv({
+      cls: "vl-notes-trash-title",
+      text: t("notes.trashImageTitle", {
+        title: item.videoTitle,
+        time: formatClock(Number(item.time) || 0)
+      })
+    });
     info.createDiv({ cls: "vl-notes-trash-meta", text: item.path });
     const actions = row.createDiv({ cls: "vl-notes-trash-actions" });
     this.actionButton(actions, "rotate-ccw", t("notes.restore"), false, () => {
@@ -201,6 +221,40 @@ export class TrashNotesModal extends Modal {
         this.render();
       });
     });
+  }
+
+  private selectionBox(parent: HTMLElement, id: string): void {
+    const label = parent.createEl("label", { cls: "vl-trash-select" });
+    const input = label.createEl("input", { type: "checkbox" });
+    input.checked = this.selected.has(id);
+    input.addEventListener("change", () => {
+      if (input.checked) this.selected.add(id);
+      else this.selected.delete(id);
+      this.render();
+    });
+  }
+
+  private confirmDeleteSelected(): void {
+    if (this.selected.size === 0) return;
+    new ConfirmModal(this.app, {
+      title: t("notes.deleteSelectedTitle"),
+      description: t("notes.deleteSelectedDesc", { count: this.selected.size }),
+      confirmText: t("notes.purge"),
+      danger: true,
+      onConfirm: async () => {
+        for (const id of [...this.selected]) {
+          if (this.plugin.data.trashNotes.some((item) => item.id === id)) {
+            await this.plugin.noteStore.purgeTrash(id);
+          } else {
+            await this.plugin.noteStore.purgeImage(id);
+          }
+        }
+        this.selected.clear();
+        new Notice(t("notes.purged"));
+        this.onChanged();
+        this.render();
+      }
+    }).open();
   }
 
   private actionButton(

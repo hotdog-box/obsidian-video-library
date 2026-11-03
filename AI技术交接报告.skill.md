@@ -541,3 +541,17 @@ npm run dev        # watch
 - 回收站包含 `trashNotes` 和 `trashImages`；清空调用 `clearTrash()`。
 - `notesGrouping` 为 `flat` 时笔记直接放根目录；`notesViewMode` 为 `list` 时只改 CSS 类。
 - 网盘直链是临时 URL；不要把它当成永久地址。文件列表浏览仍未实现。
+
+### 10.7 播放器/笔记最新约束
+
+- B 站清晰度来自 `resolveBilibiliStream().qualities`；切换时保留播放时间/音量/播放状态。
+- 本地/直链不要显示清晰度选择。
+- 空格/方向键在 `player-modal.onShortcut` 处理；输入框、文本域内不拦截。
+- 播放器 footer 必须 sticky；`.vl-player-main` 独立滚动；modal 支持拖拽和 `is-maximized`。
+- `NoteNode.images[]` 是图片的唯一顺序来源；旧数据可能只有 `imagePath`，用 `imagesFor()` 兼容。
+- 删除单张图片调用 `trashImage(video,node,path)`；不要直接删文件。
+- 总结默认展开；`images.length > 1` 自动折叠；用户手动切换后保留。
+- 节点归组用 `parentId`；MD 子节点用 `###`；解析器必须同时接受 `##`/`###`。
+- `vault.on("modify")` 同步外部 Markdown 修改，但用 `noteWriteGuard` 防止自身写入循环。
+- 回收站多选删除要调用 `purgeTrash`/`purgeImage`。
+- 侧边栏有“视频笔记管理”按钮；卡片/列表有“打开笔记”按钮。

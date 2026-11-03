@@ -6105,3 +6105,285 @@ button.vl-cloud-help-link {
   background: color-mix(in srgb, var(--text-warning, #e8a33d) 10%, transparent);
   border-radius: 5px;
 }
+
+.modal.vl-player-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 42px);
+}
+
+.modal.vl-player-modal .vl-player-layout {
+  flex: 1;
+  min-height: 0;
+}
+
+.vl-player-main {
+  height: 100%;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.vl-player-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  padding: 8px 0 4px;
+  margin-top: 8px;
+  background: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.vl-player-notes-host {
+  height: 100%;
+  max-height: none;
+}
+
+.vl-player-modal .vl-notes-panel {
+  height: 100%;
+}
+
+.vl-player-drag-handle {
+  cursor: move;
+  user-select: none;
+}
+
+select.vl-player-quality-select,
+select.vl-player-speed-select {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 3px;
+  font-size: 9px;
+  color: #fff;
+  cursor: pointer;
+  background: rgb(255 255 255 / 12%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 4px;
+}
+
+select.vl-player-quality-select option,
+select.vl-player-speed-select option {
+  color: #111;
+  background: #fff;
+}
+
+.modal.vl-player-modal.is-maximized .vl-player-main {
+  max-height: none;
+}
+
+.modal.vl-player-modal.is-maximized .vl-player-notes-panel {
+  max-height: none;
+}
+
+.vl-note-grip {
+  display: flex;
+  color: var(--text-faint);
+  cursor: grab;
+}
+
+.vl-note-grip svg {
+  width: 11px;
+  height: 11px;
+}
+
+.vl-note-node.is-dragging {
+  opacity: 0.45;
+}
+
+.vl-note-node.is-drop-target {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+}
+
+.vl-note-images {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.vl-note-images .vl-note-image {
+  margin-top: 0;
+  aspect-ratio: 16 / 9;
+}
+
+.vl-note-images .vl-note-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vl-note-summary-wrap {
+  margin-top: 5px;
+  border-top: 1px dashed var(--background-modifier-border);
+}
+
+button.vl-note-summary-toggle {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  padding: 4px 0 2px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-faint);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+button.vl-note-summary-toggle svg {
+  width: 10px;
+  height: 10px;
+}
+
+.vl-note-summary.is-collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.vl-note-editor-images {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.vl-note-editor-image {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #000;
+  border-radius: 4px;
+}
+
+.vl-note-editor-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vl-note-image-controls {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: flex;
+  gap: 1px;
+  padding: 1px;
+  background: rgb(0 0 0 / 55%);
+  border-radius: 4px;
+}
+
+.vl-note-image-controls .vl-note-action {
+  width: 18px;
+  height: 18px;
+  color: #fff;
+}
+
+.vl-note-image-controls .vl-note-action:disabled {
+  opacity: 0.35;
+}
+
+.vl-trash-select {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.vl-trash-select input {
+  cursor: pointer;
+}
+
+.vl-notes-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 6px;
+}
+
+.vl-notes-tree {
+  flex: 0 0 92px;
+  width: 92px;
+  padding: 6px 4px 6px 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--background-modifier-border);
+}
+
+button.vl-notes-tree-item {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  width: 100%;
+  padding: 3px 4px;
+  overflow: hidden;
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+button.vl-notes-tree-item:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.vl-notes-tree-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-accent);
+}
+
+.vl-notes-tree-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vl-notes-tree-count {
+  flex: 0 0 auto;
+  padding: 0 3px;
+  font-size: 8px;
+  color: var(--text-faint);
+  background: var(--background-primary);
+  border-radius: 3px;
+}
+
+.vl-notes-tree-icon {
+  display: flex;
+  color: var(--text-faint);
+}
+
+.vl-notes-tree-icon svg {
+  width: 10px;
+  height: 10px;
+}
+
+.vl-notes-layout .vl-notes-body {
+  flex: 1;
+  width: 0;
+}
+
+button.vl-sidebar-notes-button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
+}
+
+button.vl-sidebar-notes-button:hover {
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}

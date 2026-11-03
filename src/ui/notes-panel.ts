@@ -1,4 +1,4 @@
-import { App, Notice, setIcon, TFile } from "obsidian";
+import { App, Menu, Notice, setIcon, TFile } from "obsidian";
 import { t } from "../i18n";
 import type VideoLibraryPlugin from "../main";
 import type { NoteNode, VideoItem } from "../types";
@@ -33,9 +33,13 @@ function insertAtCursor(input: HTMLTextAreaElement, text: string): void {
 export class NotesPanel {
   private panelEl: HTMLElement;
   private bodyEl: HTMLElement;
+  private treeEl: HTMLElement;
   private titleInput: HTMLInputElement;
   private nodes: NoteNode[] = [];
   private editingId: string | null = null;
+  private editorImages: string[] = [];
+  private collapsed = new Set<string>();
+  private manualCollapse = new Set<string>();
 
   constructor(
     private app: App,
@@ -82,7 +86,9 @@ export class NotesPanel {
       })}`
     });
 
-    this.bodyEl = this.panelEl.createDiv({ cls: "vl-notes-body" });
+    const layout = this.panelEl.createDiv({ cls: "vl-notes-layout" });
+    this.treeEl = layout.createDiv({ cls: "vl-notes-tree" });
+    this.bodyEl = layout.createDiv({ cls: "vl-notes-body" });
   }
 
   private toolButton(
@@ -111,12 +117,17 @@ export class NotesPanel {
     const group = await this.plugin.noteStore.resolveGroup(this.video);
     this.titleInput.value = group.title || this.video.title || "";
     this.nodes = await this.plugin.noteStore.listNodes(this.video);
+    for (const node of this.nodes) {
+      const images = this.imagesFor(node);
+      if (images.length > 1 && !this.manualCollapse.has(node.id)) this.collapsed.add(node.id);
+    }
     this.host.refreshNoteMarkers(this.nodes);
     this.render();
   }
 
   private render(): void {
     this.bodyEl.empty();
+    this.renderTree();
     if (this.nodes.length === 0) {
       const empty = this.bodyEl.createDiv({ cls: "vl-notes-empty" });
       setIcon(empty.createDiv({ cls: "vl-notes-empty-icon" }), "notebook-pen");
@@ -129,9 +140,118 @@ export class NotesPanel {
     }
   }
 
+  private imagesFor(node: NoteNode): string[] {
+    if (node.images?.length) return [...node.images];
+    return node.imagePath ? [node.imagePath] : [];
+  }
+
+  private renderTree(): void {
+    this.treeEl.empty();
+    if (this.nodes.length === 0) return;
+    const ids = new Set(this.nodes.map((node) => node.id));
+    const children = new Map<string, NoteNode[]>();
+    for (const node of this.nodes) {
+      const parent = node.parentId && ids.has(node.parentId) ? node.parentId : "";
+      const list = children.get(parent) || [];
+      list.push(node);
+      children.set(parent, list);
+    }
+    const renderLevel = (parent: string, depth: number): void => {
+      for (const node of children.get(parent) || []) {
+        const item = this.treeEl.createEl("button", {
+          cls: "vl-notes-tree-item",
+          attr: { type: "button" }
+        });
+        item.setCssStyles({ paddingLeft: `${6 + depth * 10}px` });
+        const kids = children.get(node.id)?.length || 0;
+        if (kids > 0) {
+          const icon = item.createSpan({ cls: "vl-notes-tree-icon" });
+          setIcon(icon, "folder-tree");
+        }
+        item.createSpan({ cls: "vl-notes-tree-time", text: formatClock(node.time) });
+        item.createSpan({
+          cls: "vl-notes-tree-label",
+          text: node.comment || t("notes.untitledNode")
+        });
+        if (kids > 0) item.createSpan({ cls: "vl-notes-tree-count", text: String(kids) });
+        item.addEventListener("click", () => {
+          this.host.seekTo(node.time);
+          const card = this.bodyEl.querySelector<HTMLElement>(`[data-note-id="${node.id}"]`);
+          card?.scrollIntoView({ block: "center", behavior: "smooth" });
+        });
+        if (kids > 0) renderLevel(node.id, depth + 1);
+      }
+    };
+    renderLevel("", 0);
+  }
+
+  private groupMenu(node: NoteNode, event: MouseEvent): void {
+    const menu = new Menu();
+    menu.addItem((item) => {
+      item.setTitle(t("notes.ungroup")).onClick(() => {
+        void this.plugin.noteStore.updateNode(this.video, { ...node, parentId: undefined }).then(() => this.reload());
+      });
+    });
+    for (const candidate of this.nodes) {
+      if (candidate.id === node.id) continue;
+      let cursor: NoteNode | undefined = candidate;
+      let cycle = false;
+      while (cursor?.parentId) {
+        if (cursor.parentId === node.id) {
+          cycle = true;
+          break;
+        }
+        cursor = this.nodes.find((item) => item.id === cursor?.parentId);
+      }
+      if (cycle) continue;
+      menu.addItem((item) => {
+        item
+          .setTitle(`${formatClock(candidate.time)} · ${candidate.comment || t("notes.untitledNode")}`)
+          .setIcon("corner-down-right")
+          .onClick(() => {
+            void this.plugin.noteStore
+              .updateNode(this.video, { ...node, parentId: candidate.id })
+              .then(() => this.reload());
+          });
+      });
+    }
+    menu.showAtMouseEvent(event);
+  }
+
   private renderNode(node: NoteNode): void {
     const card = this.bodyEl.createDiv({ cls: "vl-note-node" });
+    card.setAttribute("data-note-id", node.id);
+    card.setAttribute("draggable", this.editingId === node.id ? "false" : "true");
+    card.addEventListener("dragstart", (event) => {
+      if (this.editingId === node.id) return;
+      event.dataTransfer?.setData("text/vl-note", node.id);
+      card.addClass("is-dragging");
+    });
+    card.addEventListener("dragend", () => card.removeClass("is-dragging"));
+    card.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      card.addClass("is-drop-target");
+    });
+    card.addEventListener("dragleave", () => card.removeClass("is-drop-target"));
+    card.addEventListener("drop", (event) => {
+      event.preventDefault();
+      card.removeClass("is-drop-target");
+      const from = event.dataTransfer?.getData("text/vl-note");
+      if (!from || from === node.id) return;
+      const ids = this.nodes.map((item) => item.id);
+      const fromIndex = ids.indexOf(from);
+      const toIndex = ids.indexOf(node.id);
+      if (fromIndex < 0 || toIndex < 0) return;
+      ids.splice(fromIndex, 1);
+      ids.splice(toIndex, 0, from);
+      void this.plugin.noteStore.reorderNodes(this.video, ids).then(() => this.reload());
+    });
+
     const head = card.createDiv({ cls: "vl-note-node-head" });
+    if (this.editingId !== node.id) {
+      const grip = head.createSpan({ cls: "vl-note-grip" });
+      setIcon(grip, "grip-vertical");
+    }
     const time = head.createEl("button", {
       cls: "vl-note-time",
       attr: { type: "button", title: t("notes.jump", { time: formatClock(node.time) }) }
@@ -150,6 +270,7 @@ export class NotesPanel {
       setIcon(edit, "pencil");
       edit.addEventListener("click", () => {
         this.editingId = node.id;
+        this.editorImages = this.imagesFor(node);
         this.render();
       });
       const remove = actions.createEl("button", {
@@ -158,24 +279,30 @@ export class NotesPanel {
       });
       setIcon(remove, "trash-2");
       remove.addEventListener("click", () => this.confirmDelete(node));
+      const group = actions.createEl("button", {
+        cls: "vl-note-action",
+        attr: { type: "button", title: t("notes.group"), "aria-label": t("notes.group") }
+      });
+      setIcon(group, "list-tree");
+      group.addEventListener("click", (event) => this.groupMenu(node, event));
 
-      if (node.imagePath) {
-        const imageWrap = card.createDiv({ cls: "vl-note-image" });
-        const image = imageWrap.createEl("img", {
-          attr: { alt: "", loading: "lazy" }
-        });
-        const url = this.plugin.noteStore.displayPath(node.imagePath);
-        if (url) image.src = url;
-        const removeImage = imageWrap.createEl("button", {
-          cls: "vl-note-image-remove",
-          attr: { type: "button", title: t("notes.removeImage"), "aria-label": t("notes.removeImage") }
-        });
-        setIcon(removeImage, "x");
-        removeImage.addEventListener("click", () => void this.removeImage(node));
+      const images = this.imagesFor(node);
+      if (images.length > 0) {
+        const grid = card.createDiv({ cls: "vl-note-images" });
+        for (const path of images) {
+          const imageWrap = grid.createDiv({ cls: "vl-note-image" });
+          const image = imageWrap.createEl("img", { attr: { alt: "", loading: "lazy" } });
+          const url = this.plugin.noteStore.displayPath(path);
+          if (url) image.src = url;
+          const removeImage = imageWrap.createEl("button", {
+            cls: "vl-note-image-remove",
+            attr: { type: "button", title: t("notes.removeImage"), "aria-label": t("notes.removeImage") }
+          });
+          setIcon(removeImage, "x");
+          removeImage.addEventListener("click", () => void this.removeImage(node, path));
+        }
       }
-      if (node.summary) {
-        card.createDiv({ cls: "vl-note-summary", text: node.summary });
-      }
+      if (node.summary) this.renderSummary(card, node);
       if (node.tags.length > 0) {
         const tags = card.createDiv({ cls: "vl-note-tags" });
         for (const tag of node.tags) tags.createSpan({ cls: "vl-note-tag", text: `#${tag}` });
@@ -201,28 +328,79 @@ export class NotesPanel {
       attr: { placeholder: t("notes.tagsPlaceholder") }
     });
     tags.value = node.tags.join(", ");
+    const imageStrip = editor.createDiv({ cls: "vl-note-editor-images" });
+    const renderStrip = (): void => {
+      imageStrip.empty();
+      for (let index = 0; index < this.editorImages.length; index += 1) {
+        const path = this.editorImages[index];
+        const item = imageStrip.createDiv({ cls: "vl-note-editor-image" });
+        const img = item.createEl("img", { attr: { alt: "", loading: "lazy" } });
+        const url = this.plugin.noteStore.displayPath(path);
+        if (url) img.src = url;
+        const controls = item.createDiv({ cls: "vl-note-image-controls" });
+        const up = controls.createEl("button", {
+          cls: "vl-note-action",
+          attr: { type: "button", title: t("notes.imageUp"), "aria-label": t("notes.imageUp") }
+        });
+        setIcon(up, "arrow-up");
+        up.disabled = index === 0;
+        up.addEventListener("click", () => {
+          [this.editorImages[index - 1], this.editorImages[index]] = [
+            this.editorImages[index],
+            this.editorImages[index - 1]
+          ];
+          renderStrip();
+        });
+        const down = controls.createEl("button", {
+          cls: "vl-note-action",
+          attr: { type: "button", title: t("notes.imageDown"), "aria-label": t("notes.imageDown") }
+        });
+        setIcon(down, "arrow-down");
+        down.disabled = index === this.editorImages.length - 1;
+        down.addEventListener("click", () => {
+          [this.editorImages[index + 1], this.editorImages[index]] = [
+            this.editorImages[index],
+            this.editorImages[index + 1]
+          ];
+          renderStrip();
+        });
+        const remove = controls.createEl("button", {
+          cls: "vl-note-action is-danger",
+          attr: { type: "button", title: t("notes.removeImage"), "aria-label": t("notes.removeImage") }
+        });
+        setIcon(remove, "trash-2");
+        remove.addEventListener("click", () => {
+          this.editorImages.splice(index, 1);
+          renderStrip();
+        });
+      }
+    };
+    renderStrip();
 
-    const bindPaste = (textarea: HTMLTextAreaElement): void => {
-      textarea.addEventListener("paste", (event) => {
-        const items = event.clipboardData?.items;
-        const item = items ? Array.from(items).find((entry) => entry.type.startsWith("image/")) : undefined;
-        if (!item) return;
-        event.preventDefault();
-        const file = item.getAsFile();
-        if (!file) return;
+    summary.addEventListener("paste", (event) => {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      const files = Array.from(items)
+        .filter((entry) => entry.type.startsWith("image/"))
+        .map((entry) => entry.getAsFile())
+        .filter((file): file is File => Boolean(file));
+      if (files.length === 0) return;
+      event.preventDefault();
+      for (const file of files) {
         void file.arrayBuffer().then(async (buffer: ArrayBuffer) => {
           const extension = file.type.includes("png") ? "png" : "jpg";
           const path = await this.plugin.noteStore.saveImageBuffer(this.video, buffer, extension);
-          insertAtCursor(textarea, `![[${path}]]`);
+          this.editorImages.push(path);
+          renderStrip();
         });
-      });
-    };
-    bindPaste(summary);
+      }
+    });
 
     const actions = editor.createDiv({ cls: "vl-actions-row" });
     const cancel = actions.createEl("button", { text: t("action.cancel"), attr: { type: "button" } });
     cancel.addEventListener("click", () => {
       this.editingId = null;
+      this.editorImages = [];
       this.render();
     });
     const save = actions.createEl("button", {
@@ -235,9 +413,28 @@ export class NotesPanel {
     });
   }
 
-  private async removeImage(node: NoteNode): Promise<void> {
-    if (!node.imagePath) return;
-    const ok = await this.plugin.noteStore.trashImage(this.video, node);
+  private renderSummary(card: HTMLElement, node: NoteNode): void {
+    const collapsed = this.collapsed.has(node.id);
+    const wrap = card.createDiv({ cls: `vl-note-summary-wrap${collapsed ? " is-collapsed" : ""}` });
+    const toggle = wrap.createEl("button", {
+      cls: "vl-note-summary-toggle",
+      attr: { type: "button", title: collapsed ? t("notes.expandSummary") : t("notes.collapseSummary") }
+    });
+    setIcon(toggle, collapsed ? "chevron-right" : "chevron-down");
+    toggle.createSpan({ text: t("notes.summaryLabel") });
+    toggle.addEventListener("click", () => {
+      this.manualCollapse.add(node.id);
+      if (this.collapsed.has(node.id)) this.collapsed.delete(node.id);
+      else this.collapsed.add(node.id);
+      this.render();
+    });
+    const content = wrap.createDiv({ cls: "vl-note-summary", text: node.summary });
+    if (collapsed) content.addClass("is-collapsed");
+  }
+
+  private async removeImage(node: NoteNode, path?: string): Promise<void> {
+    if (!path && !node.imagePath) return;
+    const ok = await this.plugin.noteStore.trashImage(this.video, node, path);
     if (!ok) {
       new Notice(t("notes.removeImageFailed"));
       return;
@@ -261,10 +458,15 @@ export class NotesPanel {
       tags: tags
         .split(/[,，、\n]+/)
         .map((tag) => tag.trim().replace(/^#/, ""))
-        .filter(Boolean)
+        .filter(Boolean),
+      images: [...this.editorImages],
+      imagePath: this.editorImages[0]
     };
+    const removed = this.imagesFor(node).filter((path) => !this.editorImages.includes(path));
     await this.plugin.noteStore.updateNode(this.video, updated);
+    for (const path of removed) await this.plugin.noteStore.trashImage(this.video, updated, path);
     this.editingId = null;
+    this.editorImages = [];
     await this.reload();
     new Notice(t("notes.saved"));
   }

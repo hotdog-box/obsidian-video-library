@@ -72,7 +72,9 @@ export interface NoteNode {
   comment: string;
   summary: string;
   tags: string[];
+  images?: string[];
   imagePath?: string;
+  parentId?: string;
   createdAt: number;
 }
 
@@ -103,6 +105,7 @@ export interface TrashImage {
   videoId: string;
   videoTitle: string;
   nodeId: string;
+  time?: number;
   path: string;
   trashPath: string;
   notePath: string;

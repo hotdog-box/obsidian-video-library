@@ -156,6 +156,7 @@ export default class VideoLibraryPlugin extends Plugin {
   coverStore!: CoverStore;
   noteStore!: NoteStore;
   activePlayer: VideoPlayerModal | null = null;
+  noteWriteGuard = 0;
   streamServer = new StreamServer();
   latestRelease: UpdateRelease | null = null;
   updateChecking = false;
@@ -243,6 +244,19 @@ export default class VideoLibraryPlugin extends Plugin {
 
     this.addSettingTab(new VideoLibrarySettingTab(this.app, this));
 
+    this.registerEvent(
+      this.app.vault.on("modify", (file) => {
+        if (Date.now() < this.noteWriteGuard) return;
+        if (!this.data.noteGroups.some((group) => group.notePath === file.path)) return;
+        this.activePlayer?.refreshNotes();
+        for (const leaf of this.app.workspace.getLeavesOfType(NOTES_FLOAT_VIEW_TYPE)) {
+          const view = leaf.view;
+          if (view instanceof NotesFloatingView) view.refresh();
+        }
+        this.refreshNotesManager();
+      })
+    );
+
     if (this.data.settings.autoCheckUpdates) {
       window.setTimeout(() => void this.checkForUpdates(false), 5000);
     }
@@ -285,6 +299,8 @@ export default class VideoLibraryPlugin extends Plugin {
       await leaf.setViewState({ type: NOTES_VIEW_TYPE, active: true });
     }
     await this.app.workspace.revealLeaf(leaf);
+    const view = leaf.view;
+    if (view instanceof NotesView) void view.refresh();
   }
 
   async openNotesFloating(video: VideoItem): Promise<void> {
@@ -544,6 +560,7 @@ export default class VideoLibraryPlugin extends Plugin {
             videoId: String(trash.videoId),
             videoTitle: String(trash.videoTitle || ""),
             nodeId: String(trash.nodeId || ""),
+            time: Number(trash.time) || undefined,
             path: String(trash.path),
             trashPath: String(trash.trashPath),
             notePath: String(trash.notePath || ""),
@@ -663,6 +680,13 @@ export default class VideoLibraryPlugin extends Plugin {
     this.refreshViews();
     new Notice(t("notice.undone"));
     return true;
+  }
+
+  refreshNotesManager(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(NOTES_VIEW_TYPE)) {
+      const view = leaf.view;
+      if (view instanceof NotesView) void view.refresh();
+    }
   }
 
   refreshViews(): void {

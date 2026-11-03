@@ -193,6 +193,17 @@ export class VideoLibraryView extends ItemView {
     add.createSpan({ text: t("action.addVideo") });
     add.addEventListener("click", () => this.openAdd());
 
+    const notesManager = sidebar.createEl("button", {
+      cls: "vl-sidebar-notes-button",
+      attr: { type: "button" }
+    });
+    setIcon(notesManager.createSpan({ cls: "vl-btn-icon" }), "notebook-pen");
+    notesManager.createSpan({ text: t("notes.manageButton") });
+    notesManager.addEventListener("click", () => {
+      this.plugin.focusMainWindow();
+      void this.plugin.openNotesView();
+    });
+
     const nav = sidebar.createDiv({ cls: "vl-nav" });
     this.navItems.clear();
     this.navItem(nav, "home", "home", t("nav.home"), this.plugin.data.videos.length);
@@ -1991,6 +2002,7 @@ export class VideoLibraryView extends ItemView {
     const end = row.createDiv({ cls: "vl-list-end" });
     const actions = end.createDiv({ cls: "vl-list-actions" });
     iconButton(actions, "play", t("action.play"), () => this.openPlayer(video), "vl-card-action");
+    iconButton(actions, "notebook-pen", t("notes.open"), () => this.openNoteFor(video), "vl-card-action");
     iconButton(actions, "pencil", t("action.edit"), () => this.openEdit(video), "vl-card-action");
     if (video.url) {
       iconButton(
@@ -2395,6 +2407,7 @@ export class VideoLibraryView extends ItemView {
     dragHandle.addEventListener("dragstart", (event) => this.onCardDragStart(event, "video", video.id, card));
     dragHandle.addEventListener("dragend", () => this.clearDragState());
     iconButton(actions, "play", t("action.play"), () => this.openPlayer(video), "vl-card-action");
+    iconButton(actions, "notebook-pen", t("notes.open"), () => this.openNoteFor(video), "vl-card-action");
     iconButton(actions, "pencil", t("action.edit"), () => this.openEdit(video), "vl-card-action");
     if (video.url) {
       iconButton(
@@ -2494,6 +2507,12 @@ export class VideoLibraryView extends ItemView {
     );
     menu.addItem((item) =>
       item
+        .setTitle(t("notes.open"))
+        .setIcon("notebook-pen")
+        .onClick(() => this.openNoteFor(video))
+    );
+    menu.addItem((item) =>
+      item
         .setTitle(t("action.edit"))
         .setIcon("pencil")
         .onClick(() => this.openEdit(video))
@@ -2581,6 +2600,11 @@ export class VideoLibraryView extends ItemView {
   private openEdit(video: VideoItem): void {
     HoverPreview.stopActive();
     new VideoEditModal(this.app, this.plugin, video).open();
+  }
+
+  private openNoteFor(video: VideoItem): void {
+    this.plugin.focusMainWindow();
+    void this.plugin.noteStore.openNote(video);
   }
 
   private openPlayer(video: VideoItem): void {

@@ -38,12 +38,20 @@ export interface BilibiliLoginPoll {
   user?: string;
 }
 
+export interface BilibiliQuality {
+  id: number;
+  label: string;
+  videoUrl: string;
+  audioUrl?: string;
+}
+
 export interface BilibiliStreamInfo {
   videoUrl: string;
   audioUrl?: string;
   duration?: number;
   quality: string;
   referer: string;
+  qualities: BilibiliQuality[];
 }
 
 function cookieHeader(cookie: string): Record<string, string> {
@@ -221,31 +229,54 @@ export async function resolveBilibiliStream(
 
   if (data.dash?.video?.length) {
     const videos = [...data.dash.video].filter((item) => item.baseUrl || item.base_url);
-    const avc = videos.filter((item) => item.codecid === 7);
-    const pool = avc.length > 0 ? avc : videos;
-    pool.sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
-    const selected = pool[0];
-    const remoteVideo = selected.baseUrl || selected.base_url;
-    if (!remoteVideo) return null;
     const audios = [...(data.dash.audio || [])].filter((item) => item.baseUrl || item.base_url);
     audios.sort((a, b) => (Number(b.bandwidth) || 0) - (Number(a.bandwidth) || 0));
     const remoteAudio = audios[0]?.baseUrl || audios[0]?.base_url;
+    const byQuality = new Map<number, DashMedia>();
+    for (const item of videos) {
+      const id = Number(item.id) || 0;
+      const existing = byQuality.get(id);
+      if (!existing || (item.codecid === 7 && existing.codecid !== 7)) byQuality.set(id, item);
+    }
+    const qualities: BilibiliQuality[] = [...byQuality.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .map(([id, item]) => {
+        const remoteVideo = item.baseUrl || item.base_url || "";
+        return {
+          id,
+          label: QUALITY_NAMES[id] || String(id),
+          videoUrl: streamServer.urlFor(remoteVideo, headers),
+          audioUrl: remoteAudio ? streamServer.urlFor(remoteAudio, headers) : undefined
+        };
+      })
+      .filter((item) => Boolean(item.videoUrl));
+    const selected = qualities[0];
+    if (!selected) return null;
     return {
-      videoUrl: streamServer.urlFor(remoteVideo, headers),
-      audioUrl: remoteAudio ? streamServer.urlFor(remoteAudio, headers) : undefined,
+      videoUrl: selected.videoUrl,
+      audioUrl: selected.audioUrl,
       duration: data.dash.duration,
-      quality: QUALITY_NAMES[Number(selected.id) || 0] || "Bilibili",
-      referer
+      quality: selected.label,
+      referer,
+      qualities
     };
   }
 
   const progressive = data.durl?.[0]?.url;
   if (progressive) {
+    const quality = QUALITY_NAMES[Number(data.quality) || 64] || "Bilibili";
     return {
       videoUrl: streamServer.urlFor(progressive, headers),
       duration: data.durl?.[0]?.length,
-      quality: QUALITY_NAMES[Number(data.quality) || 64] || "Bilibili",
-      referer
+      quality,
+      referer,
+      qualities: [
+        {
+          id: Number(data.quality) || 64,
+          label: quality,
+          videoUrl: streamServer.urlFor(progressive, headers)
+        }
+      ]
     };
   }
   return null;
